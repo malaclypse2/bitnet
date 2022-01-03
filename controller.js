@@ -5,9 +5,13 @@ const script_grow = "/scripts/grow.js";
 const script_weaken = "/scripts/weaken.js";
 const script_hack = "/scripts/hack.js";
 
+var servers = {};
+
+
 export async function main(ns) {
 
-	if (!ns.ls("home").find(f => f === script_purchaseServers)) {
+	// Make sure the scripts all exist.
+	if (ns.fileExists(script_purchaseServers, 'home')) {
 		ns.tprint(`Could not find script '${script_purchaseServers}`)
 		return
 	}
@@ -24,12 +28,13 @@ export async function main(ns) {
 		return
 	}
 
+	// Set an initial set of ratios.
 	var ratio = {
 		grow: 0.50,
 		weaken: 0.25,
 		hack: 0.25
 	}
-	//getTargetServer
+
 	var programsCount = await getProgramsAndInstall(false, ns);
 	var myInfo = {
 		level: ns.getHackingLevel(),
@@ -70,6 +75,10 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 		var targetSecurityLevel = await ns.getServerSecurityLevel(targetServer);
 		var targetMinSecurityLevel = await ns.getServerMinSecurityLevel(targetServer);
 		var securityThresh = targetMinSecurityLevel + 5;
+
+		ns.tprint('----- Current Servers -----')
+		ns.tprint(JSON.stringify(servers));
+		ns.tprint('----- Current Servers -----')
 
 		var identifyRatio = (ratio.grow == 0.8) ? 'GROWING' : (ratio.weaken == 0.8) ? 'WEAKENING' : 'HACKING';
 		if (prevRatio.grow != ratio.grow) {
@@ -140,9 +149,9 @@ async function callScripts(targetServer, ratio, myInfo, programsCount, ns) {
 	var purchasedServers = await ns.getPurchasedServers();
 	if (purchasedServers.length != 0) {
 		var i = 0;
-		while (i < 25) {
+		while (i < purchasedServers.length) {
 			var maxRam = await ns.getServerMaxRam(purchasedServers[i]);
-			await scriptsExecution(purchasedServers[i], maxRam, targetServer, ratio, ns);
+			await dispatchToServer(purchasedServers[i], maxRam, targetServer, ratio, ns);
 			i++;
 		}
 	}
@@ -152,7 +161,7 @@ async function callScripts(targetServer, ratio, myInfo, programsCount, ns) {
 	if (myInfo.level == 1)
 		usePercentage = '0.95';
 	var maxRam = Math.ceil(await ns.getServerMaxRam('home') - 40)
-	await scriptsExecution('home', maxRam, targetServer, ratio, ns);
+	await dispatchToServer('home', maxRam, targetServer, ratio, ns);
 
 
 	//run searchAndHack in other Servers
@@ -187,7 +196,7 @@ export async function nearServersCapture(nearServers, searchedServers, programsC
 					// ns.tprint(maxRam)
 
 					if (maxRam != 0)
-						await scriptsExecution(nearServers[i], maxRam, targetServer, ratio, ns)
+						await dispatchToServer(nearServers[i], maxRam, targetServer, ratio, ns)
 					var nearServersDeeper = await ns.scan(nearServers[i]);
 
 					if (nearServersDeeper.length > 1 && searchDepth > 0) {
@@ -200,21 +209,21 @@ export async function nearServersCapture(nearServers, searchedServers, programsC
 }
 
 // execute 3 hacking scripts in the given server
-export async function scriptsExecution(currentServer, maxRam, targetServer, ratio, ns) {
-	 ns.tprint("Setting up " + currentServer)
-	if (currentServer != 'home') {
-		await ns.scp(script_grow, currentServer);
-		await ns.scp(script_weaken, currentServer);
-		await ns.scp(script_hack, currentServer);
+export async function dispatchToServer(server, maxRam, target, ratio, ns) {
+	// ns.tprint("Setting up " + currentServer)
+	if (server != 'home') {
+		await ns.scp(script_grow, server);
+		await ns.scp(script_weaken, server);
+		await ns.scp(script_hack, server);
 	}
-	if (ns.scriptRunning(script_grow, currentServer)) {
-		await ns.scriptKill(script_grow, currentServer);
+	if (ns.scriptRunning(script_grow, server)) {
+		await ns.scriptKill(script_grow, server);
 	}
-	if (ns.scriptRunning(script_weaken, currentServer)) {
-		await ns.scriptKill(script_weaken, currentServer);
+	if (ns.scriptRunning(script_weaken, server)) {
+		await ns.scriptKill(script_weaken, server);
 	}
-	if (ns.scriptRunning(script_hack, currentServer)) {
-		await ns.scriptKill(script_hack, currentServer);
+	if (ns.scriptRunning(script_hack, server)) {
+		await ns.scriptKill(script_hack, server);
 	}
 
 	var growThread = Math.floor(maxRam * ratio.grow / await ns.getScriptRam(script_grow));
@@ -225,18 +234,22 @@ export async function scriptsExecution(currentServer, maxRam, targetServer, rati
 		if (weakenThread == 0 && hackThread == 0) {
 			growThread = Math.floor(maxRam * 1 / await ns.getScriptRam(script_grow));
 		}
-		await ns.exec(script_grow, currentServer, growThread, targetServer);
+		await ns.exec(script_grow, server, growThread, target);
 
 	}
 	if (weakenThread != 0)
-		await ns.exec(script_weaken, currentServer, weakenThread, targetServer);
+		await ns.exec(script_weaken, server, weakenThread, target);
 	if (hackThread != 0)
-		await ns.exec(script_hack, currentServer, hackThread, targetServer);
+		await ns.exec(script_hack, server, hackThread, target);
+	
+	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread};
 }
 
 export async function getProgramsAndInstall(installCheck, ns) {
 	if (!installCheck) {
-		var count = 1; //BruteSSH.exe is always installed due to the augmentation
+		var count = 0; 
+		if (ns.fileExists('BruteSSH.exe', 'home'))
+			count++;
 		if (ns.fileExists('FTPCrack.exe', 'home'))
 			count++;
 		if (ns.fileExists('relaySMTP.exe', 'home'))
