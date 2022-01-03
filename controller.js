@@ -1,11 +1,29 @@
 /** @param {NS} ns **/
 
-const script_purchaseServers = "/script/purchaseServers.js";
-const script_grow = "/script/grow.js";
-const script_weaken = "/script/weaken.js";
-const script_hack = "/script/hack.js";
+const script_purchaseServers = "/scripts/purchaseServers.js";
+const script_grow = "/scripts/grow.js";
+const script_weaken = "/scripts/weaken.js";
+const script_hack = "/scripts/hack.js";
 
 export async function main(ns) {
+
+	if (!ns.ls("home").find(f => f === script_purchaseServers)) {
+		ns.tprint(`Could not find script '${script_purchaseServers}`)
+		return
+	}
+	if (!ns.ls("home").find(f => f === script_grow)) {
+		ns.tprint(`Could not find script '${script_grow}`)
+		return
+	}
+	if (!ns.ls("home").find(f => f === script_weaken)) {
+		ns.tprint(`Could not find script '${script_weaken}`)
+		return
+	}
+	if (!ns.ls("home").find(f => f === script_hack)) {
+		ns.tprint(`Could not find script '${script_hack}`)
+		return
+	}
+
 	var ratio = {
 		grow: 0.50,
 		weaken: 0.25,
