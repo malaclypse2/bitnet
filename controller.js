@@ -1,5 +1,10 @@
 /** @param {NS} ns **/
 
+const script_purchaseServers = "/script/purchaseServers.js";
+const script_grow = "/script/grow.js";
+const script_weaken = "/script/weaken.js";
+const script_hack = "/script/hack.js";
+
 export async function main(ns) {
 	var ratio = {
 		grow: 0.50,
@@ -18,7 +23,7 @@ export async function main(ns) {
 	await ns.nuke(targetServer);
 	ratio = await getRatio(targetServer, ns);
 
-	await ns.exec('purchaseServers.ns', 'home');
+	await ns.exec(script_purchaseServers, 'home');
 	await ns.sleep(1 * 5 * 1000);
 	// printing Logs
 	var targetMoneyAvailable = await ns.getServerMoneyAvailable(targetServer);
@@ -58,7 +63,7 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 			ns.tprint('RUNNING ' + identifyRatio + ' SCRIPTS')
 			ns.tprint('---------------------------------------------------');
 			targetServer = await getTargetServer(myInfo, ns);
-			await ns.exec('purchaseServers.ns', 'home');
+			await ns.exec(script_purchaseServers, 'home');
 			await ns.sleep(1 * 5 * 1000);
 			await callScripts(targetServer, ratio, myInfo, programsCount, ns);
 		}
@@ -180,35 +185,35 @@ export async function nearServersCapture(nearServers, searchedServers, programsC
 export async function scriptsExecution(currentServer, maxRam, targetServer, ratio, ns) {
 	// ns.tprint(currentServer)
 	if (currentServer != 'home') {
-		await ns.scp('grow.js', currentServer);
-		await ns.scp('weaken.js', currentServer);
-		await ns.scp('hack.js', currentServer);
+		await ns.scp(script_grow, currentServer);
+		await ns.scp(script_weaken, currentServer);
+		await ns.scp(script_hack, currentServer);
 	}
-	if (ns.scriptRunning('grow.js', currentServer)) {
-		await ns.scriptKill('grow.js', currentServer);
+	if (ns.scriptRunning(script_grow, currentServer)) {
+		await ns.scriptKill(script_grow, currentServer);
 	}
-	if (ns.scriptRunning('weaken.js', currentServer)) {
-		await ns.scriptKill('weaken.js', currentServer);
+	if (ns.scriptRunning(script_weaken, currentServer)) {
+		await ns.scriptKill(script_weaken, currentServer);
 	}
-	if (ns.scriptRunning('hack.js', currentServer)) {
-		await ns.scriptKill('hack.js', currentServer);
+	if (ns.scriptRunning(script_hack, currentServer)) {
+		await ns.scriptKill(script_hack, currentServer);
 	}
 
-	var growThread = Math.floor(maxRam * ratio.grow / await ns.getScriptRam('grow.js'));
-	var weakenThread = Math.floor(maxRam * ratio.weaken / await ns.getScriptRam('weaken.js'));
-	var hackThread = Math.floor((maxRam * ratio.hack) / await ns.getScriptRam('hack.js'));
+	var growThread = Math.floor(maxRam * ratio.grow / await ns.getScriptRam(script_grow));
+	var weakenThread = Math.floor(maxRam * ratio.weaken / await ns.getScriptRam(script_weaken));
+	var hackThread = Math.floor((maxRam * ratio.hack) / await ns.getScriptRam(script_hack));
 	// ns.tprint('Ratio : ' + JSON.stringify(ratio))
 	if (growThread != 0) {
 		if (weakenThread == 0 && hackThread == 0) {
-			growThread = Math.floor(maxRam * 1 / await ns.getScriptRam('grow.js'));
+			growThread = Math.floor(maxRam * 1 / await ns.getScriptRam(script_grow));
 		}
-		await ns.exec('grow.js', currentServer, growThread, targetServer);
+		await ns.exec(script_grow, currentServer, growThread, targetServer);
 
 	}
 	if (weakenThread != 0)
-		await ns.exec('weaken.js', currentServer, weakenThread, targetServer);
+		await ns.exec(script_weaken, currentServer, weakenThread, targetServer);
 	if (hackThread != 0)
-		await ns.exec('hack.js', currentServer, hackThread, targetServer);
+		await ns.exec(script_hack, currentServer, hackThread, targetServer);
 }
 
 export async function getProgramsAndInstall(installCheck, ns) {
