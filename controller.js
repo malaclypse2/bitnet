@@ -67,13 +67,13 @@ export async function main(ns) {
 	await controlRatio(targetServer, ratio, myInfo, programsCount, ns);
 }
 
-async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
+async function controlRatio(target, ratio, myInfo, programsCount, ns) {
 	while (true) {
 		var prevRatio = ratio;
-		ratio = await getRatio(targetServer, ns);
-		var targetMoneyAvailable = await ns.getServerMoneyAvailable(targetServer);
-		var targetSecurityLevel = await ns.getServerSecurityLevel(targetServer);
-		var targetMinSecurityLevel = await ns.getServerMinSecurityLevel(targetServer);
+		ratio = await getRatio(target, ns);
+		var targetMoneyAvailable = await ns.getServerMoneyAvailable(target);
+		var targetSecurityLevel = await ns.getServerSecurityLevel(target);
+		var targetMinSecurityLevel = await ns.getServerMinSecurityLevel(target);
 		var securityThresh = targetMinSecurityLevel + 5;
 
 		ns.tprint('----- Current Servers -----')
@@ -100,10 +100,10 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 			ns.tprint('Target Server Security Level : +' + (targetSecurityLevel - targetMinSecurityLevel).toFixed(2))
 			ns.tprint('RUNNING ' + identifyRatio + ' SCRIPTS')
 			ns.tprint('---------------------------------------------------');
-			targetServer = await getTargetServer(myInfo, ns);
+			target = await getTargetServer(myInfo, ns);
 			await ns.exec(script_purchaseServers, 'home');
 			await ns.sleep(1 * 5 * 1000);
-			await callScripts(targetServer, ratio, myInfo, programsCount, ns);
+			await callScripts(target, ratio, myInfo, programsCount, ns);
 		}
 		else {
 			ns.tprint('---------------------------------------------------');
@@ -116,7 +116,10 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 		}
 
 		// sleep
-		await ns.sleep(5 * 60 * 1000);
+		let waitTime = 1000;
+		waitTime = Math.max(waitTime, await ns.getGrowTime(target), await ns.getWeakenTime(target), await ns.getHackTime(target));
+
+		await ns.sleep(waitTime);
 		//await ns.sleep(1 * 60 * 1000);
 	}
 }
@@ -255,17 +258,17 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	
 	// Save some statistics about this server and the threads running on it.
 	let dispatchTime = await ns.getTimeSinceLastAug();
-	var waitTime = 0;
+	let waitTime = 1000;
 	if (growThread > 0) { 
-		var w = await ns.getGrowTime(target);
+		let w = await ns.getGrowTime(target);
 		waitTime = Math.max(waitTime, w);
 	}
 	if (weakenThread > 0) {
-		var w = await ns.getWeakenTime(target);
+		let w = await ns.getWeakenTime(target);
 		waitTime = Math.max(waitTime, w);
 	}
 	if (hackThread > 0) {
-		var w = await ns.getHackTime(target);
+		let w = await ns.getHackTime(target);
 		waitTime = Math.max(waitTime, w);
 	}
 

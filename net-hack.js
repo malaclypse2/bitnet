@@ -17,11 +17,26 @@ export async function main(ns) {
 
 	while(True) {
 		// Hack available servers
+		playerInfo = netlib.getPlayerInfo(ns);
+		servers = netlib.getAllServerInfo(ns);
+		for (const server of servers) {
+			info = servers[server]
+			// Try to root any servers we haven't gotten yet.
+			if (!info.rooted) {
+				const success = netlib.root(server)
+				if (success) {
+					servers[server] = await netlib.getServerInfo(server, ns)
+				}
+			}
+		}
 
+		ns.tprint(JSON.stringify(servers))
 
-		
 		// Check target status
 		// Decide if we need to re-allocate threads
+		
+		// Sleep 
+		await ns.sleep(1 * 60 * 1000);
 	} // End while(True)
 }
 
