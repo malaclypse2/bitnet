@@ -79,12 +79,13 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 		ns.tprint('----- Current Servers -----')
 		var w=0, h=0, g=0;
 		for (const server in servers) {
+			ns.tprint(JSON.stringify(server))
 			w += server.w;
 			h += server.h;
 			g += server.g;
 		}
 		ns.tprint(`Hacking: ${h}, Growing: ${g}, Weakening: ${h}.`);
-		//ns.tprint(JSON.stringify(servers));
+		ns.tprint(JSON.stringify(servers));
 		ns.tprint('----- Current Servers -----')
 
 		var identifyRatio = (ratio.grow == 0.8) ? 'GROWING' : (ratio.weaken == 0.8) ? 'WEAKENING' : 'HACKING';
