@@ -267,7 +267,14 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 		waitTime = Math.max(waitTime, w);
 	}
 
-	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread, 't': dispatchTime, 'w': waitTime};
+	servers[server] = {
+		'ram': maxRam, 
+		'slots': Math.floor(maxRam/1.75),
+		'g': growThread, 
+		'w': weakenThread, 
+		'h': hackThread, 
+		't': dispatchTime + waitTime
+	};
 }
 
 export async function getProgramsAndInstall(installCheck, ns) {
