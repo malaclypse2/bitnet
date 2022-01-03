@@ -79,11 +79,12 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 		ns.tprint('----- Current Servers -----')
 		var w=0, h=0, g=0;
 		for (const server in servers) {
-			ns.tprint(JSON.stringify(server))
-			w += server.w;
-			h += server.h;
-			g += server.g;
+			w += servers[server].w;
+			h += servers[server].h;
+			g += servers[server].g;
 		}
+		let total = w + h + g;
+
 		ns.tprint(`Hacking: ${h}, Growing: ${g}, Weakening: ${h}.`);
 		ns.tprint(JSON.stringify(servers));
 		ns.tprint('----- Current Servers -----')
@@ -250,7 +251,23 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	if (hackThread != 0)
 		await ns.exec(script_hack, server, hackThread, target);
 	
-	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread, 't': ns.getTimeSinceLastAug()};
+	// Save some statistics about this server and the threads running on it.
+	let dispatchTime = await ns.getTimeSinceLastAug();
+	var waitTime = 0;
+	if (growthThread > 0) { 
+		var w = await ns.getGrowthTime(target);
+		waitTime = max(waitTime, w);
+	}
+	if (weakenThread > 0) {
+		var w = await ns.getWeakenTime(target);
+		waitTime = max(waitTime, w);
+	}
+	if (hackThread > 0) {
+		var w = await ns.getHackTime(target);
+		waitTime = max(waitTime, w);
+	}
+
+	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread, 't': dispatchTime, 'w': waitTime};
 }
 
 export async function getProgramsAndInstall(installCheck, ns) {
