@@ -254,7 +254,7 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	// Save some statistics about this server and the threads running on it.
 	let dispatchTime = await ns.getTimeSinceLastAug();
 	var waitTime = 0;
-	if (growthThread > 0) { 
+	if (growThread > 0) { 
 		var w = await ns.getGrowthTime(target);
 		waitTime = max(waitTime, w);
 	}
