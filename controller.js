@@ -11,7 +11,7 @@ var servers = {};
 export async function main(ns) {
 
 	// Make sure the scripts all exist.
-	if (ns.fileExists(script_purchaseServers, 'home')) {
+	if (!ns.fileExists(script_purchaseServers, 'home')) {
 		ns.tprint(`Could not find script '${script_purchaseServers}`)
 		return
 	}
