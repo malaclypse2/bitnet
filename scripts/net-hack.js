@@ -21,19 +21,25 @@ export async function main(_ns) {
 	let target = await getTargetServer(playerInfo, ns);
 	ns.tprint(`Target: ${target}`)
 
+	let servers = await getAllServerInfo(ns);
+
 	while (true) {
 		// Root any available servers
-		await rootServers(ns)
+		const oldExploitCount = playerInfo.exploits
 		playerInfo = await getPlayerInfo(ns);
-		let servers = await getAllServerInfo(ns);
+		if (oldExploitCount != playerInfo.exploits) {
+			// It's only worth evaluating new targets when we get a new exploit.
+			await rootServers(ns)
+			servers = await getAllServerInfo(ns);
+		}
 		//		ns.tprint(JSON.stringify(servers))
 
 		// See how many slots we have available.
-		let slots = 0
-		for (const server in servers) {
-			slots += servers[server].slots
-		}
-		ns.tprint(`Total available hacking slots: ${slots}`)
+		let pool = getPoolFromServers(servers, ns);
+		ns.tprint(`Total available hacking slots: ${pool.slots}`)
+		ns.tprint(`Hack  : ${pool.hack}`)
+		ns.tprint(`Grow  : ${pool.grow}`)
+		ns.tprint(`Weaken: ${pool.weaken}`)
 
 		// Check target status
 		// Decide if we need to re-allocate threads
@@ -41,8 +47,21 @@ export async function main(_ns) {
 		// Sleep 
 		await ns.sleep(1 * 60 * 1000);
 	} // End while(True)
+	
+	ns.tprint("Goodnight, Gracie!")
 }
 
+function getPoolFromServers(servers, ns) {
+	pool = { slots = 0, grow = 0, hack = 0, weaken = 0 }
+	for (const server in servers) {
+		const info = servers[server];
+		pool.slots += info.slots;
+		pool.grow += info.g;
+		pool.hack += info.h;
+		pool.weaken += info.w;
+	}
+	return pool;
+}
 
 export async function getTargetServer(info, ns) {
 	var target = '';

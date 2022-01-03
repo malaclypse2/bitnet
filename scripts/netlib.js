@@ -25,6 +25,46 @@ export async function getPlayerInfo(ns) {
 	}
 }
 
+export async function getServerInfo(server, ns) {
+	let ram = await ns.getServerMaxRam(server)
+	return {
+		'ram': ram,
+		'slots': Math.floor(ram / 1.75),
+		'rooted': await ns.hasRootAccess(server),
+		
+	}
+
+}
+
+function scan(ns, parent, server, list) {
+	const children = ns.scan(server);
+	for (let child of children) {
+		if (parent == child) {
+			continue;
+		}
+		list.push(child);
+
+		scan(ns, server, child, list);
+	}
+}
+
+export function getServerNames(ns) {
+	const list = [];
+	scan(ns, '', 'home', list);
+	return list;
+}
+
+export async function getAllServerInfo(ns) {
+	let servers = { 'home': await getServerInfo('home', ns) }
+
+	let foundServers = getServerNames(ns);
+	for (const server of foundServers) {
+		let info = await getServerInfo(server, ns);
+		servers[server] = info
+	}
+	return servers
+}
+
 export async function getProgramCount(ns) {
 	let count = 0;
 	if (ns.fileExists('BruteSSH.exe', 'home'))
@@ -59,43 +99,4 @@ export async function root(target, ns) {
 		return 1;
 	}
 	return 0;
-}
-
-export async function getServerInfo(server, ns) {
-	let ram = await ns.getServerMaxRam(server)
-	return {
-		'ram': ram,
-		'slots': Math.floor(ram / 1.75),
-		'rooted': await ns.hasRootAccess(server)
-	}
-
-}
-
-function scan(ns, parent, server, list) {
-	const children = ns.scan(server);
-	for (let child of children) {
-		if (parent == child) {
-			continue;
-		}
-		list.push(child);
-
-		scan(ns, server, child, list);
-	}
-}
-
-export function getServerNames(ns) {
-	const list = [];
-	scan(ns, '', 'home', list);
-	return list;
-}
-
-export async function getAllServerInfo(ns) {
-	let servers = { 'home': await getServerInfo('home', ns) }
-
-	let foundServers = getServerNames(ns);
-	for (const server of foundServers) {
-		let info = await getServerInfo(server, ns);
-		servers[server] = info
-	}
-	return servers
 }
