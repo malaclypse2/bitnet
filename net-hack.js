@@ -26,7 +26,7 @@ export async function main(ns) {
 			const info = servers[server]
 			// Try to root any servers we haven't gotten yet.
 			if (!info.rooted) {
-				const success = await root(server)
+				const success = await root(server, ns)
 				if (success) {
 					servers[server] = await getServerInfo(server, ns)
 				}
