@@ -8,7 +8,7 @@ export async function main(ns) {
 export async function getPlayerInfo(ns) {
 	return {
 		level: ns.getHackingLevel(),
-		exploits: await getProgramCount(),
+		exploits: await getProgramCount(ns),
 		moneyAvailable: await ns.getServerMoneyAvailable('home')
 	}
 }
