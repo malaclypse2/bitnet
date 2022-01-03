@@ -1,4 +1,4 @@
-import * as netlib from "/scripts/netlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root } from "/scripts/netlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/grow.js";
@@ -11,21 +11,24 @@ export async function main(ns) {
 	validateScripts(ns);
 
 	// Pick a target
-	var playerInfo = netlib.getPlayerInfo(ns);
+	let playerInfo = await getPlayerInfo(ns);
+	ns.tprint(JSON.stringify(playerInfo))
 	let target = await getTargetServer(playerInfo, ns);
 	ns.tprint(`Target: ${target}`)
 
-	while(true) {
+	while (true) {
 		// Hack available servers
-		playerInfo = netlib.getPlayerInfo(ns);
-		servers = netlib.getAllServerInfo(ns);
-		for (const server of servers) {
-			info = servers[server]
+		playerInfo = await getPlayerInfo(ns);
+		let servers = await getAllServerInfo(ns);
+		ns.tprint(JSON.stringify(servers))
+
+		for (const server in servers) {
+			const info = servers[server]
 			// Try to root any servers we haven't gotten yet.
 			if (!info.rooted) {
-				const success = netlib.root(server)
+				const success = await root(server)
 				if (success) {
-					servers[server] = await netlib.getServerInfo(server, ns)
+					servers[server] = await getServerInfo(server, ns)
 				}
 			}
 		}
@@ -34,7 +37,7 @@ export async function main(ns) {
 
 		// Check target status
 		// Decide if we need to re-allocate threads
-		
+
 		// Sleep 
 		await ns.sleep(1 * 60 * 1000);
 	} // End while(True)
@@ -43,7 +46,7 @@ export async function main(ns) {
 
 export async function getTargetServer(info, ns) {
 	var target = '';
-	if (info.exploits >= 0 && info.level > 0 ){
+	if (info.exploits >= 0 && info.level > 0) {
 		target = 'foodnstuff'
 	}
 	if (info.exploits >= 1 && info.level > 40) {

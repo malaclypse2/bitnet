@@ -1,10 +1,10 @@
 /** @param {NS} ns **/
 export async function main(ns) {
 	ns.tprint("No user servicable parts inside.")
-	
+
 	ns.tprint("getPlayerInfo:")
 	ns.tprint(JSON.stringify(await getPlayerInfo(ns)))
-	
+
 	ns.tprint("getServerInfo('n00dles')")
 	ns.tprint(JSON.stringify(await getServerInfo('n00dles', ns)))
 
@@ -61,10 +61,10 @@ export async function getServerInfo(server, ns) {
 	let ram = await ns.getServerMaxRam(server)
 	return {
 		'ram': ram,
-		'slots': Math.floor(ram/1.75),
+		'slots': Math.floor(ram / 1.75),
 		'rooted': await ns.hasRootAccess(server)
-		}
-	
+	}
+
 }
 
 function scan(ns, parent, server, list) {
@@ -86,7 +86,7 @@ export function getServerNames(ns) {
 }
 
 export async function getAllServerInfo(ns) {
-	let servers = {'home': await getServerInfo('home', ns)}
+	let servers = { 'home': await getServerInfo('home', ns) }
 
 	let foundServers = getServerNames(ns);
 	for (const server of foundServers) {
