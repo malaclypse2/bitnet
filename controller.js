@@ -183,7 +183,7 @@ export async function nearServersCapture(nearServers, searchedServers, programsC
 
 // execute 3 hacking scripts in the given server
 export async function scriptsExecution(currentServer, maxRam, targetServer, ratio, ns) {
-	// ns.tprint(currentServer)
+	 ns.tprint("Setting up " + currentServer)
 	if (currentServer != 'home') {
 		await ns.scp(script_grow, currentServer);
 		await ns.scp(script_weaken, currentServer);
