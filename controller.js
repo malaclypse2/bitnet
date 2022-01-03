@@ -77,15 +77,17 @@ async function controlRatio(targetServer, ratio, myInfo, programsCount, ns) {
 		var securityThresh = targetMinSecurityLevel + 5;
 
 		ns.tprint('----- Current Servers -----')
-		var w=0, h=0, g=0;
+		var w=0, h=0, g=0, slots = 0;
 		for (const server in servers) {
 			w += servers[server].w;
 			h += servers[server].h;
 			g += servers[server].g;
+			slots += servers[server].slots;
 		}
 		let total = w + h + g;
 
 		ns.tprint(`Hacking: ${h}, Growing: ${g}, Weakening: ${h}.`);
+		ns.tprint(`Total: ${total} (Slots: ${slots})`);
 		ns.tprint(JSON.stringify(servers));
 		ns.tprint('----- Current Servers -----')
 
@@ -269,7 +271,7 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 
 	servers[server] = {
 		'ram': maxRam, 
-		'slots': Math.floor(maxRam/1.75),
+		'slots': Math.floor(maxRam/2),
 		'g': growThread, 
 		'w': weakenThread, 
 		'h': hackThread, 
