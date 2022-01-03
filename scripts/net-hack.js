@@ -1,3 +1,6 @@
+/** @type import(".").NS */
+let ns = null;
+
 import { getPlayerInfo, getAllServerInfo, getServerInfo, root } from "/scripts/netlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
@@ -5,14 +8,16 @@ const script_grow = "/scripts/grow.js";
 const script_weaken = "/scripts/weaken.js";
 const script_hack = "/scripts/hack.js";
 
-/** @param {NS} ns **/
-export async function main(ns) {
+/** @param {NS} _ns **/
+export async function main(_ns) {
+	ns = _ns;
 	ns.tprint('Starting hacking controller.')
+	
 	validateScripts(ns);
-
+	
 	// Pick a target
 	let playerInfo = await getPlayerInfo(ns);
-	ns.tprint(JSON.stringify(playerInfo))
+	//	ns.tprint(JSON.stringify(playerInfo))
 	let target = await getTargetServer(playerInfo, ns);
 	ns.tprint(`Target: ${target}`)
 

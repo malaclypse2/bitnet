@@ -1,5 +1,9 @@
-/** @param {NS} ns **/
-export async function main(ns) {
+/** @type import(".").NS */
+let ns = null;
+
+export async function main(_ns) {
+	ns = _ns;
+	
 	ns.tprint("No user servicable parts inside.")
 
 	ns.tprint("getPlayerInfo:")
