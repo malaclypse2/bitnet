@@ -38,7 +38,7 @@ export async function getProgramCount(ns) {
 }
 
 export async function root(target, ns) {
-	let exploits = await getProgramCount();
+	let exploits = await getProgramCount(ns);
 	let needed = await ns.getServerNumPortsRequired(target);
 	if (exploits >= needed) {
 		if (ns.fileExists('BruteSSH.exe', 'home'))

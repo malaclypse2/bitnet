@@ -17,23 +17,18 @@ export async function main(ns) {
 	ns.tprint(`Target: ${target}`)
 
 	while (true) {
-		// Hack available servers
+		// Root any available servers
+		await rootServers(ns)
 		playerInfo = await getPlayerInfo(ns);
 		let servers = await getAllServerInfo(ns);
-		ns.tprint(JSON.stringify(servers))
+		//		ns.tprint(JSON.stringify(servers))
 
+		// See how many slots we have available.
+		let slots = 0
 		for (const server in servers) {
-			const info = servers[server]
-			// Try to root any servers we haven't gotten yet.
-			if (!info.rooted) {
-				const success = await root(server, ns)
-				if (success) {
-					servers[server] = await getServerInfo(server, ns)
-				}
-			}
+			slots += servers[server].slots
 		}
-
-		ns.tprint(JSON.stringify(servers))
+		ns.tprint(`Total available hacking slots: ${slots}`)
 
 		// Check target status
 		// Decide if we need to re-allocate threads
@@ -56,6 +51,20 @@ export async function getTargetServer(info, ns) {
 		target = 'phantasy'
 	}
 	return target;
+}
+
+export async function rootServers(ns) {
+	let servers = await getAllServerInfo(ns);
+	for (const server in servers) {
+		const info = servers[server]
+		// Try to root any servers we haven't gotten yet.
+		if (!info.rooted) {
+			const success = await root(server, ns)
+			if (success) {
+				servers[server] = await getServerInfo(server, ns)
+			}
+		}
+	}
 }
 
 function validateScripts(ns) {
