@@ -1,14 +1,13 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root } from "/scripts/netlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets } from "/scripts/netlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/grow.js";
 const script_weaken = "/scripts/weaken.js";
 const script_hack = "/scripts/hack.js";
 
-/** @param {NS} _ns **/
 export async function main(_ns) {
 	ns = _ns;
 	ns.tprint('Starting hacking controller.')
@@ -18,10 +17,11 @@ export async function main(_ns) {
 	// Pick a target
 	let playerInfo = await getPlayerInfo(ns);
 	//	ns.tprint(JSON.stringify(playerInfo))
-	let target = await getTargetServer(playerInfo, ns);
-	ns.tprint(`Target: ${target}`)
-
 	let servers = await getAllServerInfo(ns);
+	// Force a root check on available servers when we start up
+	servers = await rootServers(servers, ns)
+	let targets = findTargets(servers, 5, playerInfo, ns)
+	ns.tprint(`Target: ${targets}`)
 
 	while (true) {
 		// Root any available servers
@@ -29,12 +29,12 @@ export async function main(_ns) {
 		playerInfo = await getPlayerInfo(ns);
 		if (oldExploitCount != playerInfo.exploits) {
 			// It's only worth evaluating new targets when we get a new exploit.
-			await rootServers(ns)
-			servers = await getAllServerInfo(ns);
+			servers = await rootServers(servers, ns)
 		}
 		//		ns.tprint(JSON.stringify(servers))
 
 		// See how many slots we have available.
+
 		let pool = getPoolFromServers(servers, ns);
 		ns.tprint(`Total available hacking slots: ${pool.slots}`)
 		ns.tprint(`Hack  : ${pool.hack}`)
@@ -47,18 +47,19 @@ export async function main(_ns) {
 		// Sleep 
 		await ns.sleep(1 * 60 * 1000);
 	} // End while(True)
-	
+
 	ns.tprint("Goodnight, Gracie!")
 }
 
 function getPoolFromServers(servers, ns) {
-	pool = { slots = 0, grow = 0, hack = 0, weaken = 0 }
+	let pool = { slots: 0, grow: 0, hack: 0, weaken: 0 }
 	for (const server in servers) {
 		const info = servers[server];
-		pool.slots += info.slots;
-		pool.grow += info.g;
-		pool.hack += info.h;
-		pool.weaken += info.w;
+		// Treat undefined as 0 here.
+		pool.slots  += info.slots || 0;
+		pool.grow   += info.g     || 0;
+		pool.hack   += info.h     || 0;
+		pool.weaken += info.w     || 0;
 	}
 	return pool;
 }
@@ -77,18 +78,23 @@ export async function getTargetServer(info, ns) {
 	return target;
 }
 
-export async function rootServers(ns) {
-	let servers = await getAllServerInfo(ns);
+export async function rootServers(servers, _ns) {
+	ns = _ns
 	for (const server in servers) {
 		const info = servers[server]
 		// Try to root any servers we haven't gotten yet.
 		if (!info.rooted) {
 			const success = await root(server, ns)
 			if (success) {
-				servers[server] = await getServerInfo(server, ns)
+				// merge existing data so we don't lose thread counts
+				servers[server] = {
+					...info,
+					...await getServerInfo(server, ns)
+				}
 			}
 		}
 	}
+	return servers
 }
 
 function validateScripts(ns) {

@@ -1,39 +1,82 @@
 /** @type import(".").NS */
 let ns = null;
+const worker_size = 2.0 // in GB
 
 export async function main(_ns) {
 	ns = _ns;
 	
 	ns.tprint("No user servicable parts inside.")
-
+	
 	ns.tprint("getPlayerInfo:")
-	ns.tprint(JSON.stringify(await getPlayerInfo(ns)))
+	let playerInfo = await getPlayerInfo(ns)
+	ns.tprint(JSON.stringify(playerInfo))
 
 	ns.tprint("getServerInfo('n00dles')")
-	ns.tprint(JSON.stringify(await getServerInfo('n00dles', ns)))
+	ns.tprint(JSON.stringify(getServerInfo('n00dles', ns)))
 
 	ns.tprint("getAllServerInfo:")
-	ns.tprint(JSON.stringify(await getAllServerInfo(ns)))
+	let servers = getAllServerInfo( {}, ns )
+	ns.tprint(JSON.stringify(servers))
 
+	ns.tprint("findTargets(servers, 5):")
+	let targets = findTargets(servers, 5, playerInfo, ns)
+	for (const target of targets) {
+		ns.tprint(target)
+		tprintSeverAsTarget(target, ns)
+	}
 }
 
 export async function getPlayerInfo(ns) {
 	return {
 		level: ns.getHackingLevel(),
-		exploits: await getProgramCount(ns),
+		exploits: getProgramCount(ns),
 		moneyAvailable: await ns.getServerMoneyAvailable('home')
 	}
 }
 
-export async function getServerInfo(server, ns) {
-	let ram = await ns.getServerMaxRam(server)
+export function tprintSeverAsTarget(server, _ns){
+	ns = _ns
+	ns.tprint(`----- Server: ${server.name} -----`)
+	ns.tprint(`-- Money:    ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})`)
+	ns.tprint(`-- Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(2)}` )
+	ns.tprint('')
+}
+
+export function getServerInfo(server, _ns) {
+	ns = _ns
+	let ram = ns.getServerMaxRam(server)
 	return {
+		'name': server,
 		'ram': ram,
-		'slots': Math.floor(ram / 1.75),
-		'rooted': await ns.hasRootAccess(server),
-		
+		'slots': Math.floor(ram / worker_size),
+		'rooted': ns.hasRootAccess(server),
+		'maxMoney': ns.getServerMaxMoney(server),
+		'currentMoney': ns.getServerMoneyAvailable(server),
+		'hackFactor': ns.hackAnalyze(server), 			// Percentage of cash stolen per thread
+		'hackTime': ns.getHackTime(server),				// ms per hack() call
+		'securityBase': ns.getServerMinSecurityLevel(server),
+		'securityCurrent': ns.getServerSecurityLevel(server),
+		'levelRequired': ns.getServerRequiredHackingLevel(server)
 	}
 
+}
+
+export function findTargets(servers, num, playerInfo, _ns){
+	ns = _ns
+	let targets = []
+	// Calculate a theoretical profitiablity score for each server
+	for (const server in servers) {
+		let info = servers[server]
+		info.score = info.maxMoney * info.hackFactor / info.securityBase
+		if (info.levelRequired > playerInfo.level) {
+			info.score = 0;
+		}
+		targets.push(info)
+	}
+	// sort the target array by score
+	targets.sort((a,b) => a.score - b.score)
+	targets.reverse()
+	return targets.slice(0,num)
 }
 
 function scan(ns, parent, server, list) {
@@ -54,18 +97,19 @@ export function getServerNames(ns) {
 	return list;
 }
 
-export async function getAllServerInfo(ns) {
-	let servers = { 'home': await getServerInfo('home', ns) }
+export function getAllServerInfo(servers, _ns) {
+	ns = _ns
+	servers['home'] = {...servers['home'], ...getServerInfo('home', ns)}
 
 	let foundServers = getServerNames(ns);
 	for (const server of foundServers) {
-		let info = await getServerInfo(server, ns);
-		servers[server] = info
+		let info = getServerInfo(server, ns);
+		servers[server] = {...servers[server], ...info}
 	}
 	return servers
 }
 
-export async function getProgramCount(ns) {
+export function getProgramCount(ns) {
 	let count = 0;
 	if (ns.fileExists('BruteSSH.exe', 'home'))
 		count++;
@@ -82,7 +126,7 @@ export async function getProgramCount(ns) {
 }
 
 export async function root(target, ns) {
-	let exploits = await getProgramCount(ns);
+	let exploits = getProgramCount(ns);
 	let needed = await ns.getServerNumPortsRequired(target);
 	if (exploits >= needed) {
 		if (ns.fileExists('BruteSSH.exe', 'home'))
