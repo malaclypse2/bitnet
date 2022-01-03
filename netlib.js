@@ -3,6 +3,8 @@ export async function main(ns) {
 	ns.tprint("No user servicable parts inside.")
 	ns.tprint("getPlayerInfo:")
 	ns.tprint(JSON.stringify(await getPlayerInfo(ns)))
+	ns.tprint("getServerInfo('n00dles')")
+	ns.tprint(JSON.stringify(await getServerInfo('n00dles')))
 }
 
 export async function getPlayerInfo(ns) {
