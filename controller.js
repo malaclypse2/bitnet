@@ -242,7 +242,7 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	if (hackThread != 0)
 		await ns.exec(script_hack, server, hackThread, target);
 	
-	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread};
+	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread, 't': ns.getTimeSinceLastAug()};
 }
 
 export async function getProgramsAndInstall(installCheck, ns) {
