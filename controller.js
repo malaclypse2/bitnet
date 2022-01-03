@@ -1,5 +1,4 @@
 /** @param {NS} ns **/
-// import { config } from './config.ns'
 
 export async function main(ns) {
 	var ratio = {
@@ -18,7 +17,7 @@ export async function main(ns) {
 	await getProgramsAndInstall(targetServer, ns);
 	await ns.nuke(targetServer);
 	ratio = await getRatio(targetServer, ns);
-	// ns.tprint(targetServer);
+	ns.tprint("Target: " + targetServer);
 
 	await ns.exec('purchaseServers.ns', 'home');
 	await ns.sleep(1 * 5 * 1000);
