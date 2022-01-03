@@ -255,7 +255,7 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	let dispatchTime = await ns.getTimeSinceLastAug();
 	var waitTime = 0;
 	if (growThread > 0) { 
-		var w = await ns.getGrowthTime(target);
+		var w = await ns.getGrowTime(target);
 		waitTime = max(waitTime, w);
 	}
 	if (weakenThread > 0) {
