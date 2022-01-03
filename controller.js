@@ -256,15 +256,15 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 	var waitTime = 0;
 	if (growThread > 0) { 
 		var w = await ns.getGrowTime(target);
-		waitTime = max(waitTime, w);
+		waitTime = Math.max(waitTime, w);
 	}
 	if (weakenThread > 0) {
 		var w = await ns.getWeakenTime(target);
-		waitTime = max(waitTime, w);
+		waitTime = Math.max(waitTime, w);
 	}
 	if (hackThread > 0) {
 		var w = await ns.getHackTime(target);
-		waitTime = max(waitTime, w);
+		waitTime = Math.max(waitTime, w);
 	}
 
 	servers[server] = {'g': growThread, 'w': weakenThread, 'h': hackThread, 't': dispatchTime, 'w': waitTime};
