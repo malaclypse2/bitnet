@@ -1,12 +1,12 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets } from "/scripts/netlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, tprintSeverAsTarget } from "/scripts/netlib.js";
 
-const script_purchaseServers = "/scripts/purchaseServers.js";
-const script_grow = "/scripts/grow.js";
-const script_weaken = "/scripts/weaken.js";
-const script_hack = "/scripts/hack.js";
+// const script_purchaseServers = "/scripts/purchaseServers.js";
+const script_grow = "/scripts/growOnce.js";
+const script_weaken = "/scripts/weakenOnce.js";
+const script_hack = "/scripts/hackOnce.js";
 
 export async function main(_ns) {
 	ns = _ns;
@@ -17,11 +17,13 @@ export async function main(_ns) {
 	// Pick a target
 	let playerInfo = await getPlayerInfo(ns);
 	//	ns.tprint(JSON.stringify(playerInfo))
-	let servers = await getAllServerInfo(ns);
+	let servers = await getAllServerInfo({}, ns);
 	// Force a root check on available servers when we start up
 	servers = await rootServers(servers, ns)
 	let targets = findTargets(servers, 5, playerInfo, ns)
-	ns.tprint(`Target: ${targets}`)
+	for (const target of targets) {
+		tprintSeverAsTarget(target, ns)
+	}
 
 	while (true) {
 		// Root any available servers
