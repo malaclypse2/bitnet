@@ -1,2 +1,1 @@
-
-["/scripts/controller.js"]
+["controller.js"]
