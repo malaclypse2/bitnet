@@ -198,7 +198,7 @@ export async function nearServersCapture(nearServers, searchedServers, programsC
 		if (findCheck) {
 			var reqLevel = ns.getServerRequiredHackingLevel(nearServers[i]);
 			var currentLevel = ns.getHackingLevel();
-			if (nearServers[i] != 'home' && reqLevel <= currentLevel) {
+			if (nearServers[i] != 'home') {
 				var totalPorts = programsCount;
 				await getProgramsAndInstall(nearServers[i], ns);
 				if (await ns.getServerNumPortsRequired(nearServers[i]) <= totalPorts) {
@@ -271,7 +271,7 @@ export async function dispatchToServer(server, maxRam, target, ratio, ns) {
 
 	servers[server] = {
 		'ram': maxRam, 
-		'slots': Math.floor(maxRam/2),
+		'slots': Math.floor(maxRam/1.75),
 		'g': growThread, 
 		'w': weakenThread, 
 		'h': hackThread, 
