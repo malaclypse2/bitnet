@@ -15,15 +15,15 @@ export async function main(ns) {
 		ns.tprint(`Could not find script '${script_purchaseServers}`)
 		return
 	}
-	if (!ns.ls("home").find(f => f === script_grow)) {
+	if (!ns.fileExists(script_grow, 'home')) {
 		ns.tprint(`Could not find script '${script_grow}`)
 		return
 	}
-	if (!ns.ls("home").find(f => f === script_weaken)) {
+	if (!ns.fileExists(script_weaken, 'home')) {
 		ns.tprint(`Could not find script '${script_weaken}`)
 		return
 	}
-	if (!ns.ls("home").find(f => f === script_hack)) {
+	if (!ns.fileExists(script_hack, 'home')) {
 		ns.tprint(`Could not find script '${script_hack}`)
 		return
 	}
