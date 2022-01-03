@@ -15,7 +15,7 @@ export async function main(ns) {
 	let target = await getTargetServer(playerInfo, ns);
 	ns.tprint(`Target: ${target}`)
 
-	while(True) {
+	while(true) {
 		// Hack available servers
 		playerInfo = netlib.getPlayerInfo(ns);
 		servers = netlib.getAllServerInfo(ns);
