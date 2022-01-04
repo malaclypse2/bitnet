@@ -9,7 +9,7 @@ const script_weaken = "/scripts/weakenOnce.js";
 const script_hack = "/scripts/hackOnce.js";
 const num_targets = 5;
 
-async function runStart(num_targets, _ns) {
+async function runStart(numTargets, _ns) {
 	ns = _ns
 
 	ns.tprint('Starting hacking controller.')
@@ -41,7 +41,7 @@ async function runStart(num_targets, _ns) {
 	await ns.sleep(100);
 
 	// Get the best targets based on our evaluation function
-	let targets = findTargets(servers, num_targets, playerInfo, ns)
+	let targets = findTargets(servers, numTargets, playerInfo, ns)
 
 	// Everyone loves a noodle shop.
 	let additionalTarget = getServerInfo('n00dles', ns)
@@ -72,6 +72,7 @@ async function runStart(num_targets, _ns) {
 		servers = await allocateThreads(servers, targets, ns)
 
 		// Display some status before we sleep
+		ns.tprint('[================================]')
 		for (const target of targets) {
 			tprintSeverAsTarget(target, ns)
 		}
@@ -83,9 +84,12 @@ async function runStart(num_targets, _ns) {
 
 export async function main(_ns) {
 	ns = _ns;
-	args = ns.args
-	
-	await runStart(num_targets, ns);
+	const args = ns.args
+	if (args.length > 1) {
+		await runStart(args[0], ns)
+	} else {
+		await runStart(num_targets, ns);
+	}
 
 	ns.tprint("Goodnight, Gracie!")
 }
@@ -105,7 +109,7 @@ function getPoolFromServers(servers, ns) {
 
 async function allocateThreads(servers, targets, _ns) {
 	ns = _ns
-	ns.tprint('Allocating attack threads.')
+	ns.print('Allocating attack threads.')
 	
 	// Make sure our notion of running attack threads against each target matches reality.
 	// First, reset all our assumptions
@@ -154,10 +158,6 @@ async function allocateThreads(servers, targets, _ns) {
 		servers[servername] = server
 	} // End loop over servers
 
-	ns.tprint('Pool before allocation of hacking threads')
-	let pool = getPoolFromServers(servers, ns)
-	ns.tprint(JSON.stringify(pool))
-
 	let freeSlots = 0
 	for (const server in servers) {
 		freeSlots += servers[server].slots || 0
@@ -170,7 +170,7 @@ async function allocateThreads(servers, targets, _ns) {
 	let totalDesiredWeakenThreads = targets.reduce((sum, target) => sum + (target.desiredWeakenThreads || 0), 0) - targets.reduce((sum, target) => sum + (target.runningWeakenThreads || 0), 0)
 	totalDesiredWeakenThreads = Math.max(totalDesiredWeakenThreads, 0)
 	
-	ns.tprint(`Want to assign ${totalDesiredHackThreads} hack threads, ${totalDesiredWeakenThreads} weaken threads, and ${totalDesiredGrowThreads} grow threads in ${freeSlots} free slots.`)
+	ns.print(`Want to assign ${totalDesiredHackThreads} hack threads, ${totalDesiredWeakenThreads} weaken threads, and ${totalDesiredGrowThreads} grow threads in ${freeSlots} free slots.`)
 	
 	let allocatedHackThreads = 0, allocatedGrowThreads = 0, allocatedWeakenThreads = 0
 	// Allocate the attack threads first.
@@ -186,7 +186,7 @@ async function allocateThreads(servers, targets, _ns) {
 	//ns.tprint(`Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`)
 	
 	// Allocate all hack threads first.
-	ns.tprint(`Allocating ${allocatedHackThreads} hack threads`)
+	ns.print(`Allocating ${allocatedHackThreads} hack threads`)
 	for (const servername in servers) {
 		let server = servers[servername];
 		if (server.slots < 1) {
@@ -231,7 +231,7 @@ async function allocateThreads(servers, targets, _ns) {
 		servers[servername] = server;
 	}
 
-	ns.tprint(`Allocating ${allocatedGrowThreads} grow threads`)
+	ns.print(`Allocating ${allocatedGrowThreads} grow threads`)
 	for (const servername in servers) {
 		let server = servers[servername];
 		if (server.slots < 1) {
@@ -275,7 +275,7 @@ async function allocateThreads(servers, targets, _ns) {
 		servers[servername] = server;
 	}
 
-	ns.tprint(`Allocating ${allocatedWeakenThreads} weaken threads`)
+	ns.print(`Allocating ${allocatedWeakenThreads} weaken threads`)
 	for (const servername in servers) {
 		let server = servers[servername];
 		if (server.slots < 1) {

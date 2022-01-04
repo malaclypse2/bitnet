@@ -40,10 +40,8 @@ export function tprintSeverAsTarget(server, _ns){
 	ns = _ns
 	ns.tprint(`----- Server: ${server.name} -----`)
 	ns.tprint(`-- Money:    ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})`)
-	ns.tprint(`---- Wants ${server.desiredHackThreads || 0} hack threads. Has ${server.runningHackThreads || 0} hack threads running.`)
-	ns.tprint(`---- Wants ${server.desiredGrowThreads || 0} growth threads. Has ${server.runningGrowThreads || 0} growth threads running.`)
 	ns.tprint(`-- Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(2)}` )
-	ns.tprint(`---- Wants ${server.desiredWeakenThreads || 0} weaken threads. Has ${server.runningWeakenThreads || 0} weaken threads running.`)
+	ns.tprint(`----- Hacking: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}], Growing: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weakening: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] -----`)
 	ns.tprint('')
 }
 
