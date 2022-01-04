@@ -36,13 +36,11 @@ export async function getPlayerInfo(ns) {
 	}
 }
 
-export function tprintSeverAsTarget(server, _ns){
+export function printSeverAsTarget(server, _ns){
 	ns = _ns
-	ns.tprint(`----- Server: ${server.name} -----`)
-	ns.tprint(`-- Money:    ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})`)
-	ns.tprint(`-- Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(2)}` )
-	ns.tprint(`----- Hacking: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}], Growing: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weakening: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] -----`)
-	ns.tprint('')
+	ns.print(`----- Server: ${server.name} -----`)
+	ns.print(`-- Money: ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})    Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(1)}`)
+	ns.print(`-- Hacking: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}], Growing: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weakening: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] -----`)
 }
 
 export function getServerInfo(server, _ns) {
@@ -79,7 +77,9 @@ export function findTargets(servers, num, playerInfo, _ns){
 	for (const server in servers) {
 		let info = servers[server]
 		info = evaluateTarget(info, playerInfo, ns)
-		targets.push(info)
+		if (info.score != 0) {
+			targets.push(info)
+		}
 	}
 	// sort the target array by score
 	targets.sort((a,b) => a.score - b.score)

@@ -1,7 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, tprintSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/netlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/netlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/growOnce.js";
@@ -72,9 +72,9 @@ async function runStart(numTargets, _ns) {
 		servers = await allocateThreads(servers, targets, ns)
 
 		// Display some status before we sleep
-		ns.tprint('[================================]')
+		ns.clearLog()
 		for (const target of targets) {
-			tprintSeverAsTarget(target, ns)
+			printSeverAsTarget(target, ns)
 		}
 
 		// Sleep 
