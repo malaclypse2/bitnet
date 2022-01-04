@@ -1,6 +1,6 @@
 /** @type import(".").NS */
 let ns = null;
-const worker_size = 2.0 	// in GB
+export const worker_size = 2.0 	// in GB
 const hackThreshold = 0.75 	// Don't start hacking unless a server has this percentage of max money
 const hackFactor = 0.10 	// Try to hack this percentage of money at a time
 
@@ -40,20 +40,21 @@ export function tprintSeverAsTarget(server, _ns){
 	ns = _ns
 	ns.tprint(`----- Server: ${server.name} -----`)
 	ns.tprint(`-- Money:    ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})`)
-	ns.tprint(`---- Wants 0 hack threads. Has 0 hack threads allocated.`)
-	ns.tprint(`---- Wants 0 growth threads. Has 0 growth threads allocated.`)
+	ns.tprint(`---- Wants ${server.desiredHackThreads || 0} hack threads. Has ${server.runningHackThreads || 0} hack threads running.`)
+	ns.tprint(`---- Wants ${server.desiredGrowthThreads || 0} growth threads. Has ${server.runningGrowthThreads || 0} growth threads running.`)
 	ns.tprint(`-- Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(2)}` )
-	ns.tprint(`---- Wants 0 weaken threads. Has 0 weaken threads allocated.`)
+	ns.tprint(`---- Wants ${server.desiredWeakenThreads || 0} weaken threads. Has ${server.runningWeakenThreads || 0} weaken threads running.`)
 	ns.tprint('')
 }
 
 export function getServerInfo(server, _ns) {
 	ns = _ns
 	let ram = ns.getServerMaxRam(server)
+	let freeRam = ram - ns.getServerUsedRam(server)
 	return {
 		'name': server,
 		'ram': ram,
-		'slots': Math.floor(ram / worker_size),
+		'slots': Math.floor(freeRam / worker_size),
 		'rooted': ns.hasRootAccess(server),
 		'maxMoney': ns.getServerMaxMoney(server),
 		'currentMoney': ns.getServerMoneyAvailable(server),
@@ -94,9 +95,9 @@ export function evaluateTarget(server, playerInfo, _ns) {
 		if (server.currentMoney / server.maxMoney > hackThreshold) {
 			let desiredHackFactor = hackFactor // percentage to steal per hacking cycle. Default 10%
 			server.desiredHackThreads = Math.ceil(desiredHackFactor / server.hackFactor)
+			server.desiredHackThreads = Math.max(server.desiredHackThreads, 0)
 		} else {
-			// We always want one hacking thread for a trickle of income.
-			server.desiredHackThreads = 1;
+			server.desiredHackThreads = 0;
 		}
 
 		// How much money is going to be stolen before we grow (on average)?
@@ -107,6 +108,7 @@ export function evaluateTarget(server, playerInfo, _ns) {
 		let desiredGrowthFactor = server.maxMoney / (server.currentMoney - loss);
 		if (desiredGrowthFactor >= 1 && desiredGrowthFactor < Infinity) {
 			server.desiredGrowThreads = Math.ceil(ns.growthAnalyze(server.name, desiredGrowthFactor));
+			server.desiredGrowThreads = Math.max(server.desiredGrowThreads, 0)
 		} else {
 			server.desiredGrowThreads = 1;
 		}
@@ -119,7 +121,8 @@ export function evaluateTarget(server, playerInfo, _ns) {
 		let secIncreaseFromThreads = secIncreaseFromGrowth + secIncreaseFromHacks;
 		let totalSecToWeaken = server.securityCurrent - server.securityBase + secIncreaseFromThreads;
 		
-		server.desiredWeakenThreads = totalSecToWeaken / 0.05; // Static 0.05 security per thread used.
+		server.desiredWeakenThreads = Math.ceil(totalSecToWeaken / 0.05); // Static 0.05 security per thread used.
+		server.desiredWeakenThreads = Math.max(server.desiredWeakenThreads, 0)
 
 	} else {
 		server.score = 0;
@@ -192,4 +195,11 @@ export async function root(target, ns) {
 		return 1;
 	}
 	return 0;
+}
+
+export function stopscript(servers, script,_ns){
+	ns = _ns
+	for (const servername in servers) {
+		ns.scriptKill(script, servername)
+	}
 }

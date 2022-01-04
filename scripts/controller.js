@@ -142,16 +142,16 @@ async function getRatio(targetServer, ns) {
 	}
 	else if (targetSecurity > securityThresh) {
 		ratio = {
-			grow: 0.10,
+			grow: 0.15,
 			weaken: 0.80,
-			hack: 0.10
+			hack: 0.05
 		}
 	}
 	else {
 		ratio = {
 			grow: 0.60,
-			weaken: 0.25,
-			hack: 0.15
+			weaken: 0.30,
+			hack: 0.10
 		}
 	}
 	// ns.tprint('Ratio : ' + JSON.stringify(ratio));
