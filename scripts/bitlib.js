@@ -20,11 +20,11 @@ export async function main(_ns) {
 	let servers = getAllServerInfo( {}, ns )
 	ns.tprint(JSON.stringify(servers))
 
-	ns.tprint("findTargets(servers, 5):")
-	let targets = findTargets(servers, 5, playerInfo, ns)
+	ns.tprint("findTargets:")
+	let targets = findTargets(servers, playerInfo, ns).slice(5)
 	for (const target of targets) {
 		ns.tprint(target)
-		tprintSeverAsTarget(target, ns)
+		tprintServerAsTarget(target, ns)
 	}
 }
 
@@ -36,18 +36,55 @@ export async function getPlayerInfo(ns) {
 	}
 }
 
-export function printSeverAsTarget(server, _ns){
+export function pad(pad, str, padLeft) {
+	if (typeof str === 'undefined')
+		return pad;
+	if (padLeft) {
+		return (pad + str).slice(-pad.length);
+	} else {
+		return (str + pad).substring(0, pad.length);
+	}
+}
+
+export function tprintServerAsTarget(server, _ns) {
+	ns = _ns
+	const lines = printfSeverAsTarget(server, ns)
+	for (const line of lines) {
+		ns.tprint(line)
+	}
+
+}
+export function printfSeverAsTarget(server, _ns){
 	ns = _ns
 	// Try to keep it to two or three lines per server, or it will never fit in a log window, even with just a few targets
-	const width = 35
 	const moneyCur = ns.nFormat(server.currentMoney, "$0.0a")
-	const moneyMax = ns.nFormat(server.maxMoney, "$0.0a")
-	const moneyPercent = ns.nFormat(server.currentMoney / server.maxMoney, "0%")
-	const secBase = ns.nFormat(server.securityBase, "0")
-	const secIncr = ns.nFormat(server.securityCurrent - server.securityBase, "0.0")
+	const moneyPercent = pad('   ', ns.nFormat(100*server.currentMoney / server.maxMoney, "0"), true)+'%'
+	const moneyStr = `${moneyCur} (${moneyPercent})`
+
+	const secBase = pad('  ',ns.nFormat(server.securityBase, "0"), true)
+	const secIncr = pad('    ', ns.nFormat(server.securityCurrent - server.securityBase, "0.0"))
+	const secStr = `Sec ${secBase} +${secIncr}`
+
+	const hacksRunning   = ns.nFormat(server.runningHackThreads || 0, "0")
+	const hacksWanted    = ns.nFormat(server.desiredHackThreads || 0, "0")
+	const growsRunning   = ns.nFormat(server.runningGrowThreads || 0, "0")
+	const growsWanted    = ns.nFormat(server.desiredGrowThreads || 0, "0")
+	const weakensRunning = ns.nFormat(server.runningWeakenThreads || 0, "0")
+	const weakensWanted  = ns.nFormat(server.desiredWeakenThreads || 0, "0")
+
+	const hackStr = pad(Array(16).join('─'), `Hack ${hacksRunning}/${hacksWanted}├`)
+	const growStr = pad(Array(17).join('─'), `┤Grow ${growsRunning}/${growsWanted}├`)
+	const weakenStr = pad(Array(18).join('─'), `┤Weaken ${weakensRunning}/${weakensWanted}`, true)
+
+	let line1 = `╭─┤`
+		line1 += pad(Array(17).join('─'), server.name + '├')
+		line1 += pad(Array(17).join('─'), '┤ ' + moneyStr, true) + ' ├─'
+		line1 += '┤' + secStr + `├─╮`
+
+	let line2 = `╰─┤${hackStr}${growStr}${weakenStr}├─╯`
+	let line3 = ''
 	
-	ns.print(`┌┤ ${server.name} [${moneyCur}/${moneyMax} (${moneyPercent})]		SecLevel ${secBase}+${secIncr} ├───`)
-	ns.print(`└─ Hack: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}] Grow: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weaken: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] ───`)
+	return [line1, line2, line3]
 }
 
 export function getServerInfo(server, _ns) {
@@ -77,7 +114,7 @@ export function getServerInfo(server, _ns) {
 
 }
 
-export function findTargets(servers, num, playerInfo, _ns){
+export function findTargets(servers, playerInfo, _ns){
 	ns = _ns
 	let targets = []
 	// Calculate a theoretical profitiablity score for each server
@@ -91,7 +128,7 @@ export function findTargets(servers, num, playerInfo, _ns){
 	// sort the target array by score
 	targets.sort((a,b) => a.score - b.score)
 	targets.reverse()
-	return targets.slice(0,num)
+	return targets
 }
 
 export function evaluateTarget(server, playerInfo, _ns) {

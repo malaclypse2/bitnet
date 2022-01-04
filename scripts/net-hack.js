@@ -1,17 +1,49 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/bitlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printfSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/bitlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/growOnce.js";
 const script_weaken = "/scripts/weakenOnce.js";
 const script_hack = "/scripts/hackOnce.js";
-const num_targets = 5;
+const max_targets = 100;
 
-async function runStart(numTargets, _ns) {
+// Globals so we can access them from other running instances of this porgram if we like.
+var targets
+var servers
+
+export async function main(_ns) {
+	ns = _ns;
+	// Do something with arguments
+	await runStart(ns);
+	ns.tprint("Goodnight, Gracie!")
+}
+
+async function runMonitor(_ns) {
 	ns = _ns
+	ns.tail()
+	while(true){
+		printFancyLog(ns)
+		await ns.sleep(100)
+	}
+}
 
+async function runStop(_ns) {
+	ns = _ns
+	ns.kill(ns.getScriptName(), ns.getHostname(), "start")
+	ns.kill(ns.getScriptName(), ns.getHostname(), "run")
+	ns.kill(ns.getScriptName(), ns.getHostname(), "hack")
+	ns.kill(ns.getScriptName(), ns.getHostname(), "monitor")
+	ns.kill(ns.getScriptName(), ns.getHostname(), "status")
+	ns.kill(ns.getScriptName(), ns.getHostname())
+}
+
+async function runStart(_ns) {
+	ns = _ns
+	targets = []
+	servers = {}
+	ns.tail()
 	ns.tprint('Starting hacking controller.')
 
 	ns.disableLog('getServerRequiredHackingLevel');
@@ -22,11 +54,13 @@ async function runStart(numTargets, _ns) {
 	ns.disableLog('getServerMinSecurityLevel');
 	ns.disableLog('getServerSecurityLevel');
 	ns.disableLog('getHackingLevel');
+	ns.disableLog('sleep');
 
 	validateScripts(ns);
 
 	let playerInfo = await getPlayerInfo(ns);
-	let servers = await getAllServerInfo({}, ns);
+//	let servers = await getAllServerInfo({}, ns);
+	servers = await getAllServerInfo({}, ns);
 	// Force a root check on available servers
 	servers = await rootServers(servers, ns)
 
@@ -40,69 +74,137 @@ async function runStart(numTargets, _ns) {
 	}
 	await ns.sleep(100);
 
-	// Get the best targets based on our evaluation function
-	let targets = findTargets(servers, numTargets, playerInfo, ns)
+	// Everyone loves a noodle shop. Let's start there.
+	let firstTarget = getServerInfo('n00dles', ns)
+	firstTarget = evaluateTarget(firstTarget, playerInfo, ns)
+	targets.unshift(firstTarget)
 
-	// Everyone loves a noodle shop.
-	let additionalTarget = getServerInfo('n00dles', ns)
-	additionalTarget = evaluateTarget(additionalTarget, playerInfo, ns)
-	targets.unshift(additionalTarget)
+	// How many extra targets should we start with? 
+	let pool = getPoolFromServers(servers, ns)
+	let additionalTargets = Math.floor(pool.free / 2000)
+	additionalTargets = Math.min(additionalTargets, max_targets)
+	if (pool.free > 5000 && additionalTargets) {
+		addTargets(playerInfo, additionalTargets);
+	}
 
+
+	//Set up a few timers (approx 30sec, 1min, 10min)
+	let on30 = 0, on60 = 0, on600 = 0
 	while (true) {
+		on30 = ++on30 % 30;	on60 = ++on60 % 60;	on600 = ++on600 % 600;
 		// Root any available servers
 		const oldExploitCount = playerInfo.exploits
 		playerInfo = await getPlayerInfo(ns);
-		if (oldExploitCount != playerInfo.exploits) {
-			// It's only worth evaluating new targets to root when we get a new exploit.
+		if (oldExploitCount != playerInfo.exploits || on60 == 0) {
+			// We either have a new exploit, or it's been a little while.
+			// Let's refresh our server info, and make sure there's nothing new to root.
 			servers = await rootServers(servers, ns)
 		}
-		//		ns.tprint(JSON.stringify(servers))
 
 		// re-evaluate our targets.
 		for (let i = 0; i < targets.length; i++) {
 			let target = targets[i]
 			// Update server information
 			target = { ...target, ...getServerInfo(target.name, ns) }
-			// Re-evaluate targetting criteria
+			// Re-evaluate targetting criteria, including desired attack threads
 			target = await evaluateTarget(target, playerInfo, ns);
 			targets[i] = target
 		}
 
 		// Allocate any free server slots
 		servers = await allocateThreads(servers, targets, ns)
+		pool = getPoolFromServers(servers, ns)
+
+		// Occasionally consider adding a new target
+		if (on30 == 0) {
+			// If we have a bunch of free threads, go ahead and add new targets
+			let additionalTargets = Math.floor(pool.free / 1000) + 1
+			additionalTargets = Math.min(additionalTargets, max_targets - targets.length)
+			if (pool.free > 1000 && additionalTargets) {
+				addTargets(playerInfo, additionalTargets);
+			}
+		}
 
 		// Display some status before we sleep
-		ns.clearLog()
-		for (const target of targets) {
-			printSeverAsTarget(target, ns)
-		}
+		printFancyLog(ns)
 
 		// Sleep 
 		await ns.sleep(1 * 1000);
 	} // End while(True)
 }
 
-export async function main(_ns) {
-	ns = _ns;
-	const args = ns.args
-	if (args.length > 1) {
-		await runStart(args[0], ns)
-	} else {
-		await runStart(num_targets, ns);
+function addTargets(playerInfo, numTargets) {
+	let potentialTargets = findTargets(servers, playerInfo, ns);
+	let done = false;
+	let x = potentialTargets.shift();
+	while (!done && x) {
+		let existing = targets.find(target => target.name == x.name);
+		if (!existing) {
+			targets.push(x);
+			done = targets.length >= numTargets + 1;
+		}
+		x = potentialTargets.shift();
 	}
-
-	ns.tprint("Goodnight, Gracie!")
 }
 
-function getPoolFromServers(servers, ns) {
-	let pool = { slots: 0, grow: 0, hack: 0, weaken: 0 }
+function printFancyLog(_ns) {
+	ns = _ns
+	ns.clearLog()
+
+	let pool = getPoolFromServers(servers, ns)
+	let free = ns.nFormat(pool.free, "0a")
+	let running = ns.nFormat(pool.running, "0a")
+
+	// One column
+	if (false) {
+		for (const target of targets) {
+			const lines = printfSeverAsTarget(target, ns)
+			for (const line of lines) {
+				ns.print(line)
+			}
+		}
+	}
+
+	// Two-Column. Assumes everything is pretty uniform.
+	let displayData = []
+	for (const target of targets) {
+		const lines = printfSeverAsTarget(target, ns)
+		displayData.unshift(lines)
+	}
+	while (displayData.length > 1) {
+		let col1Lines = displayData.pop()
+		let col2Lines = displayData.pop()
+		for (let i = 0; i < col1Lines.length; i++) {
+			let col1 = col1Lines[i];
+			let col2 = col2Lines[i];
+			ns.print(col1 + '     ' + col2)
+		}
+	} // Then print any leftovers
+	for (const data of displayData) {
+		for (const line of data) {
+			ns.print(line)
+		}
+	}
+	ns.print('Worker Status')
+	ns.print(`Free: ${free}, Running: ${running}`)
+
+}
+
+function getPoolFromServers(servers, _ns) {
+	ns = _ns
+	let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 }
 	for (const server in servers) {
 		const info = servers[server];
 		// Treat undefined as 0 here.
-		pool.slots  += info.slots || 0;
-		pool.grow   += info.g     || 0;
-		pool.hack   += info.h     || 0;
-		pool.weaken += info.w     || 0;
+		const free   = info.slots || 0;
+		const grow   = info.g     || 0;
+		const hack   = info.h     || 0;
+		const weaken = info.w     || 0;
+		pool.free   += free
+		pool.grow   += grow  
+		pool.hack   += hack  
+		pool.weaken += weaken
+		pool.running += grow + hack + weaken
 	}
 	return pool;
 }
