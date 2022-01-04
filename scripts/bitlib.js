@@ -38,9 +38,16 @@ export async function getPlayerInfo(ns) {
 
 export function printSeverAsTarget(server, _ns){
 	ns = _ns
-	ns.print(`----- Server: ${server.name} -----`)
-	ns.print(`-- Money: ${ns.nFormat(server.currentMoney, "$0.0a")} / ${ns.nFormat(server.maxMoney, "$0.0a")} (${ns.nFormat(server.currentMoney / server.maxMoney,"0%")})    Security: ${server.securityBase}+${(server.securityCurrent - server.securityBase).toFixed(1)}`)
-	ns.print(`-- Hacking: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}], Growing: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weakening: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] -----`)
+	// Try to keep it to two or three lines per server, or it will never fit in a log window, even with just a few targets
+	const width = 35
+	const moneyCur = ns.nFormat(server.currentMoney, "$0.0a")
+	const moneyMax = ns.nFormat(server.maxMoney, "$0.0a")
+	const moneyPercent = ns.nFormat(server.currentMoney / server.maxMoney, "0%")
+	const secBase = ns.nFormat(server.securityBase, "0")
+	const secIncr = ns.nFormat(server.securityCurrent - server.securityBase, "0.0")
+	
+	ns.print(`┌┤ ${server.name} [${moneyCur}/${moneyMax} (${moneyPercent})]		SecLevel ${secBase}+${secIncr} ├───`)
+	ns.print(`└─ Hack: [${server.runningHackThreads || 0}/${server.desiredHackThreads || 0}] Grow: [${server.runningGrowThreads || 0}/${server.desiredGrowThreads || 0}], Weaken: [${server.runningWeakenThreads || 0}/${server.desiredWeakenThreads || 0}] ───`)
 }
 
 export function getServerInfo(server, _ns) {

@@ -1,7 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/netlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/bitlib.js";
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/growOnce.js";
