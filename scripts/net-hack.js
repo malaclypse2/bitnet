@@ -1,13 +1,15 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, findTargets, printfSeverAsTarget, evaluateTarget, worker_size, stopscript } from "/scripts/bitlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "/scripts/bitlib.js";
+const hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
+const hackFactor = 0.20 	// Try to hack this percentage of money at a time
+const max_targets = 100;
 
 const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/growOnce.js";
 const script_weaken = "/scripts/weakenOnce.js";
 const script_hack = "/scripts/hackOnce.js";
-const max_targets = 100;
 
 // Globals so we can access them from other running instances of this porgram if we like.
 var targets
@@ -461,4 +463,70 @@ function validateScripts(ns) {
 		ns.tprint(`Could not find script '${script_hack}`)
 		return
 	}
+}
+export function findTargets(servers, playerInfo, _ns) {
+	ns = _ns
+	let targets = []
+	// Calculate a theoretical profitiablity score for each server
+	for (const server in servers) {
+		let info = servers[server]
+		info = evaluateTarget(info, playerInfo, ns)
+		if (info.score != 0) {
+			targets.push(info)
+		}
+	}
+	// sort the target array by score
+	targets.sort((a, b) => a.score - b.score)
+	targets.reverse()
+	return targets
+}
+
+export function evaluateTarget(server, playerInfo, _ns) {
+	ns = _ns;
+	if (server.levelRequired <= playerInfo.level) {
+		server.score = server.maxMoney * server.hackFactor / server.securityBase;
+		if (server.score == 0) {
+			return server;
+		}
+
+		if (server.currentMoney / server.maxMoney > hackThreshold) {
+			let desiredHackFactor = hackFactor // percentage to steal per hacking cycle. Default 10%
+			server.desiredHackThreads = Math.ceil(desiredHackFactor / server.hackFactor)
+			server.desiredHackThreads = Math.max(server.desiredHackThreads, 0)
+		} else {
+			server.desiredHackThreads = 0;
+		}
+
+		// How much money is going to be stolen before we grow (on average)?
+		let hacksPerGrow = server.growTime / server.hackTime
+		let loss = hacksPerGrow * server.desiredHackThreads * server.hackFactor * server.currentMoney
+		// How many growth threads would we like to have?
+		let desiredGrowthFactor = server.maxMoney / (server.currentMoney - loss);
+		if (desiredGrowthFactor >= 1 && desiredGrowthFactor < Infinity) {
+			server.desiredGrowThreads = Math.ceil(ns.growthAnalyze(server.name, desiredGrowthFactor));
+			server.desiredGrowThreads = Math.max(server.desiredGrowThreads, 0)
+		} else {
+			server.desiredGrowThreads = 1;
+		}
+		// Do we need to let the security drop some?
+		if ((server.securityCurrent - server.securityBase) > 5) {
+			server.desiredGrowThreads = 1;
+		}
+
+		// How much will security increase before we weaken?
+		let hacksPerWeaken = server.weakenTime / server.hackTime;
+		let growsPerWeaken = server.weakenTime / server.growTime;
+		let secIncreaseFromHacks = hacksPerWeaken * ns.hackAnalyzeSecurity(server.desiredHackThreads);
+		let secIncreaseFromGrowth = growsPerWeaken * ns.growthAnalyzeSecurity(server.desiredGrowThreads);
+		let secIncreaseFromThreads = secIncreaseFromGrowth + secIncreaseFromHacks;
+		let totalSecToWeaken = server.securityCurrent - server.securityBase + secIncreaseFromThreads;
+
+		server.desiredWeakenThreads = Math.ceil(totalSecToWeaken / 0.05); // Static 0.05 security per thread used.
+		server.desiredWeakenThreads = Math.max(server.desiredWeakenThreads, 0)
+
+	} else {
+		server.score = 0;
+	}
+
+	return server;
 }
