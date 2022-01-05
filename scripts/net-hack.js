@@ -12,7 +12,7 @@ const script_hack = "/scripts/hackOnce.js";
 const logTypes = ["Targets1Up", "Targets2Up", "Long", "Short"]
 var logType = "Targets2Up"
 
-// Globals so we can access them from other running instances of this porgram if we like.
+// Globals so we can access them from other running instances of this program if we like.
 var targets
 var servers
 
@@ -20,54 +20,32 @@ export async function main(_ns) {
 	ns = _ns;
 	// Do something with arguments
 	let args = ns.flags([
+		['start', false],
 		['display', 'Targets2Up'],
 		['max_targets', 100],
 		['hackFactor', 0.20],
 		['hackThreshold', 0.50],
 		['stop', false],
 	])
-	max_targets =args.max_targets;
+	max_targets = args.max_targets;
 	logType = args.display;
 	hackFactor = args.hackFactor;
 	hackThreshold = args.hackThreshold;
+
 	if (args.stop) {
 		ns.tprint('Stopping any running controllers.')
 		runStop(ns);
-	} else {
+	} else if (args.start) {
 		await runStart(ns);
-	}
-}
+	} else if (args.monitor) {
 
-function runChangeLogType(ns){
-	// Change the global logType, which should be honored by the running version of the script. I think.
-	const errStr = `
-	Current log display: '${logType}'
-	Valid display types are: ${logTypes}
-	Also 'next' and 'prev' to rotate through the list.
-	`
-	if (ns.args[1] === undefined) {
-		ns.tprint(errStr)
-		return
-	}
-	let newLogType = logTypes.find(t => t == ns.args[1])
-	if (newLogType){
-		logType = newLogType;
-	} else if (ns.args[1].toLower() === "next") {
-		let i = logTypes.findIndex( t => t == ns.args[1] )
-		i = (i + 1) % logTypes.length
-		logType = logTypes[i]
-	} else if (ns.args[1].toLower() === "prev") {
-		let i = logTypes.findIndex(t => t == ns.args[1])
-		i = (i - 1) % logTypes.length
-		logType = logTypes[i]
-	} else {
-		ns.tprint(errStr)
 	}
 }
 
 function runStop(_ns) {
 	ns = _ns
 	ns.scriptKill(ns.getScriptName(), ns.getHostname())
+	ns.ps('home')
 }
 
 async function runStart(_ns) {
@@ -123,6 +101,9 @@ async function runStart(_ns) {
 	let on30 = 0, on60 = 0, on600 = 0
 	while (true) {
 		on30 = ++on30 % 30;	on60 = ++on60 % 60;	on600 = ++on600 % 600;
+		// Check for comand & control 
+		checkC2Ports(ns)
+
 		// Root any available servers
 		const oldExploitCount = playerInfo.exploits
 		playerInfo = await getPlayerInfo(ns);
@@ -194,8 +175,6 @@ function printFancyLog(_ns) {
 				ns.print(line)
 			}
 		}
-		ns.print('Worker Status')
-		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
 	} 
 	else if (logType == "Targets2Up") {
 		// Two-Column. Assumes everything is pretty uniform.
@@ -218,22 +197,20 @@ function printFancyLog(_ns) {
 				ns.print(line)
 			}
 		}
-		ns.print('Worker Status')
-		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
 	} else if (logType === "Short") {
-		ns.print(`Currently attacking ${targets.length} servers.`)
-		ns.print('Worker Status')
-		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
-		ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
 		let script = ns.getRunningScript(ns.getScriptName(), ns.getHostname(), ...ns.args);
-		ns.print('Runtime: ' + ns.tFormat(script.onlineRunningTime*1000))
+		ns.print('Runtime: ' + ns.tFormat(script.onlineRunningTime * 1000))
 		let cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, "$0a")
 		ns.print(`Income: ${ns.nFormat(script.onlineMoneyMade, "$0a")} (${cps}/sec)`)
-
-		let allIncome = ns.getScriptIncome()[1];
-		let allExpGain = ns.getScriptExpGain();
+		ns.print('')
+		ns.print(`Currently attacking ${targets.length} servers.`)
 	}
 
+	ns.print('Worker Status')
+	ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
+	ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
+	// hackThreshold, hackFactor, max_targets, logType
+	ns.print(`hT ${ns.nFormat(hackThreshold, "0%")}; hF ${ns.nFormat(hackFactor, "0.0%")}; #T ${max_targets}; lt '${logType}'`)
 
 }
 
@@ -299,7 +276,7 @@ async function allocateThreads(servers, targets, _ns) {
 			let gThreads = 0
 			const gscript = ns.getRunningScript(script_grow, server.name, target.name)
 			if (gscript != null) {
-				gThreads = gscript.threads
+				gThreads = gscript.threads || 0
 			}
 			server.g += gThreads
 			target.runningGrowThreads += gThreads
@@ -570,4 +547,29 @@ export function evaluateTarget(server, playerInfo, _ns) {
 	}
 
 	return server;
+}
+
+function checkC2Ports(_ns) {
+	ns = _ns
+	// To start with, we can allow adjusting some of our global parameters via c2:
+	// hackThreshold, hackFactor, max_targets, logType
+	let commands = []
+	let cmd = ns.readPort(2)
+	while (cmd != "NULL PORT DATA") {
+		commands.push(cmd)
+	}
+	while (commands) {
+		// expects {owner:'net-hack', action: 'set', key:'some-key', value:'some-value'}
+		// ...at least for now.
+		cmd = commands.pop()
+		if (cmd.owner != "net-hack") {
+			ns.writePort(cmd)
+			continue;
+		}
+		if (cmd.key == 'hackThreshold' && cmd.action == 'set') hackThreshold = cmd.value;
+		if (cmd.key == 'hackFactor' && cmd.action == 'set') hackFactor = cmd.value;
+		if (cmd.key == 'max_targets' && cmd.action == 'set') max_targets = cmd.value;
+		if (cmd.key == 'logType' && cmd.action == 'set') logType = cmd.value;
+	}
+
 }

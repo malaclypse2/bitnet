@@ -8,7 +8,7 @@ export async function main(_ns) {
 	ns.tprint("No user servicable parts inside.")
 	
 	ns.tprint("getPlayerInfo:")
-	let playerInfo = await getPlayerInfo(ns)
+	let playerInfo = getPlayerInfo(ns)
 	ns.tprint(JSON.stringify(playerInfo))
 
 	ns.tprint("getServerInfo('n00dles')")
@@ -26,11 +26,12 @@ export async function main(_ns) {
 	}
 }
 
-export async function getPlayerInfo(ns) {
+export function getPlayerInfo(_ns) {
+	ns = _ns
 	return {
 		level: ns.getHackingLevel(),
 		exploits: getProgramCount(ns),
-		moneyAvailable: await ns.getServerMoneyAvailable('home')
+		moneyAvailable: ns.getServerMoneyAvailable('home')
 	}
 }
 
@@ -159,9 +160,10 @@ export function getProgramCount(ns) {
 	return count;
 }
 
-export async function root(target, ns) {
+export function root(target, _ns) {
+	ns = _ns
 	let exploits = getProgramCount(ns);
-	let needed = await ns.getServerNumPortsRequired(target);
+	let needed = ns.getServerNumPortsRequired(target);
 	if (exploits >= needed) {
 		if (ns.fileExists('BruteSSH.exe', 'home'))
 			ns.brutessh(target)
