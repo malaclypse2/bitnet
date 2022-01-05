@@ -102,7 +102,7 @@ async function runStart(_ns) {
 	while (true) {
 		on30 = ++on30 % 30;	on60 = ++on60 % 60;	on600 = ++on600 % 600;
 		// Check for comand & control 
-		checkC2Ports(ns)
+		// checkC2Ports(ns)
 
 		// Root any available servers
 		const oldExploitCount = playerInfo.exploits
@@ -557,11 +557,16 @@ function checkC2Ports(_ns) {
 	let cmd = ns.readPort(2)
 	while (cmd != "NULL PORT DATA") {
 		commands.push(cmd)
+		cmd = ns.readPort(2)
 	}
 	while (commands) {
 		// expects {owner:'net-hack', action: 'set', key:'some-key', value:'some-value'}
 		// ...at least for now.
 		cmd = commands.pop()
+		ns.tprint('Reading C2 command: ' + cmd)
+		if (cmd == undefined || cmd == null) {
+			continue;
+		}
 		if (cmd.owner != "net-hack") {
 			ns.writePort(cmd)
 			continue;
