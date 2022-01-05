@@ -91,7 +91,7 @@ async function runStart(ns) {
 	let additionalTargets = Math.floor(pool.free / 2000)
 	additionalTargets = Math.min(additionalTargets, max_targets)
 	if (pool.free > 5000 && additionalTargets) {
-		addTargets(playerInfo, additionalTargets);
+		addTargets(playerInfo, additionalTargets, ns);
 	}
 
 
@@ -131,7 +131,7 @@ async function runStart(ns) {
 			let additionalTargets = Math.floor(pool.free / 1000) + 1
 			additionalTargets = Math.min(additionalTargets, max_targets - targets.length)
 			if (pool.free > 1000 && additionalTargets) {
-				addTargets(playerInfo, additionalTargets);
+				addTargets(playerInfo, additionalTargets, ns);
 			}
 		}
 
@@ -143,7 +143,8 @@ async function runStart(ns) {
 	} // End while(True)
 }
 
-function addTargets(playerInfo, numTargets) {
+/** @param {import(".").NS } ns */
+function addTargets(playerInfo, numTargets, ns) {
 	let potentialTargets = findTargets(servers, playerInfo, ns);
 	let done = false;
 	let x = potentialTargets.shift();
