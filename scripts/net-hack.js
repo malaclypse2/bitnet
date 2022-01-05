@@ -303,17 +303,17 @@ export function getAttackStatus(servers, targets, ns) {
 		let procs = ns.ps(server.name) 
 		while(procs.length > 0) {
 			const proc = procs.pop()
-			if (proc.filename == script_weaken) {
+			if (proc.filename.includes('weaken')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningWeakenThreads += proc.threads;
 				server.w += proc.threads
 			}
-			if (proc.filename == script_grow) {
+			if (proc.filename.includes('grow')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningGrowThreads += proc.threads;
 				server.g += proc.threads
 			}
-			if (proc.filename == script_hack) {
+			if (proc.filename.includes('hack')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningHackThreads += proc.threads;
 				server.h += proc.threads
