@@ -73,6 +73,7 @@ async function runStart(displayTarget, displayType, ns) {
 		}
 		if (on10 == 1) {
 			getAttackStatus(servers, targets, ns)
+			targets = targets.filter( target => { target.runningHack} )
 		}
 
 		printFancyLog(servers, targets, displayTarget, displayType, ns)
