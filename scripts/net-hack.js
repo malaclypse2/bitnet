@@ -5,9 +5,9 @@ let hackFactor = 0.20 	// Try to hack this percentage of money at a time
 let max_targets = 100;
 let sleep_time = 1000;
 
-const script_grow = "/scripts/growOnce.js";
-const script_weaken = "/scripts/weakenOnce.js";
-const script_hack = "/scripts/hackOnce.js";
+const script_grow = "/scripts/util/growOnce.js";
+const script_weaken = "/scripts/util/weakenOnce.js";
+const script_hack = "/scripts/util/hackOnce.js";
 
 // Globals so we can access them from other running instances of this program if we like.
 var targets
