@@ -2,9 +2,9 @@
 let ns = null;
 
 import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "/scripts/bitlib.js";
-const hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
-const hackFactor = 0.20 	// Try to hack this percentage of money at a time
-const max_targets = 100;
+let hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
+let hackFactor = 0.20 	// Try to hack this percentage of money at a time
+let max_targets = 100;
 
 const script_grow = "/scripts/growOnce.js";
 const script_weaken = "/scripts/weakenOnce.js";
@@ -19,31 +19,55 @@ var servers
 export async function main(_ns) {
 	ns = _ns;
 	// Do something with arguments
-	if (ns.args[0]) {
-		if (ns.args[0] === "stop") runStop(ns);
-		else if (ns.args[0] === "start") await runStart(ns);
-		else if (ns.args[0] === "monitor") await runMonitor(ns);
-		else if (ns.args[0] === "log") await runChangeLogType(ns);
+	let args = ns.flags([
+		['display', 'Targets2Up'],
+		['max_targets', 100],
+		['hackFactor', 0.20],
+		['hackThreshold', 0.50],
+		['stop', false],
+	])
+	max_targets =args.max_targets;
+	logType = args.display;
+	hackFactor = args.hackFactor;
+	hackThreshold = args.hackThreshold;
+	if (args.stop) {
+		ns.tprint('Stopping any running controllers.')
+		runStop(ns);
 	} else {
 		await runStart(ns);
 	}
-	ns.tprint("Goodnight, Gracie!")
 }
 
-async function runMonitor(_ns) {
-	ns = _ns
-	ns.tail()
-	while(true){
-		printFancyLog(ns)
-		await ns.sleep(100)
+function runChangeLogType(ns){
+	// Change the global logType, which should be honored by the running version of the script. I think.
+	const errStr = `
+	Current log display: '${logType}'
+	Valid display types are: ${logTypes}
+	Also 'next' and 'prev' to rotate through the list.
+	`
+	if (ns.args[1] === undefined) {
+		ns.tprint(errStr)
+		return
+	}
+	let newLogType = logTypes.find(t => t == ns.args[1])
+	if (newLogType){
+		logType = newLogType;
+	} else if (ns.args[1].toLower() === "next") {
+		let i = logTypes.findIndex( t => t == ns.args[1] )
+		i = (i + 1) % logTypes.length
+		logType = logTypes[i]
+	} else if (ns.args[1].toLower() === "prev") {
+		let i = logTypes.findIndex(t => t == ns.args[1])
+		i = (i - 1) % logTypes.length
+		logType = logTypes[i]
+	} else {
+		ns.tprint(errStr)
 	}
 }
 
-async function runStop(_ns) {
+function runStop(_ns) {
 	ns = _ns
-	ns.kill(ns.getScriptName(), ns.getHostname(), "start")
-	ns.kill(ns.getScriptName(), ns.getHostname(), "monitor")
-	ns.kill(ns.getScriptName(), ns.getHostname())
+	ns.scriptKill(ns.getScriptName(), ns.getHostname())
 }
 
 async function runStart(_ns) {
@@ -79,7 +103,7 @@ async function runStart(_ns) {
 			await ns.scp(script_weaken, servername);
 		}
 	}
-	await ns.sleep(100);
+	await ns.asleep(100);
 
 	// Everyone loves a noodle shop. Let's start there.
 	let firstTarget = getServerInfo('n00dles', ns)
@@ -136,7 +160,7 @@ async function runStart(_ns) {
 		printFancyLog(ns)
 
 		// Sleep 
-		await ns.sleep(1 * 1000);
+		await ns.asleep(1 * 1000);
 	} // End while(True)
 }
 
@@ -159,41 +183,57 @@ function printFancyLog(_ns) {
 	ns.clearLog()
 
 	let pool = getPoolFromServers(servers, ns)
-	let free = ns.nFormat(pool.free, "0a")
-	let running = ns.nFormat(pool.running, "0a")
-
+	for (const key in pool) {
+		pool[key] = ns.nFormat(pool[key], "0a");
+	}
 	// One column
-	if (false) {
+	if (logType === "Targets1Up") {
 		for (const target of targets) {
 			const lines = printfSeverAsTarget(target, ns)
 			for (const line of lines) {
 				ns.print(line)
 			}
 		}
+		ns.print('Worker Status')
+		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
+	} 
+	else if (logType == "Targets2Up") {
+		// Two-Column. Assumes everything is pretty uniform.
+		let displayData = []
+		for (const target of targets) {
+			const lines = printfSeverAsTarget(target, ns)
+			displayData.unshift(lines)
+		}
+		while (displayData.length > 1) {
+			let col1Lines = displayData.pop()
+			let col2Lines = displayData.pop()
+			for (let i = 0; i < col1Lines.length; i++) {
+				let col1 = col1Lines[i];
+				let col2 = col2Lines[i];
+				ns.print(col1 + '     ' + col2)
+			}
+		} // Then print any leftovers
+		for (const data of displayData) {
+			for (const line of data) {
+				ns.print(line)
+			}
+		}
+		ns.print('Worker Status')
+		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
+	} else if (logType === "Short") {
+		ns.print(`Currently attacking ${targets.length} servers.`)
+		ns.print('Worker Status')
+		ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
+		ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
+		let script = ns.getRunningScript(ns.getScriptName(), ns.getHostname(), ...ns.args);
+		ns.print('Runtime: ' + ns.tFormat(script.onlineRunningTime*1000))
+		let cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, "$0a")
+		ns.print(`Income: ${ns.nFormat(script.onlineMoneyMade, "$0a")} (${cps}/sec)`)
+
+		let allIncome = ns.getScriptIncome()[1];
+		let allExpGain = ns.getScriptExpGain();
 	}
 
-	// Two-Column. Assumes everything is pretty uniform.
-	let displayData = []
-	for (const target of targets) {
-		const lines = printfSeverAsTarget(target, ns)
-		displayData.unshift(lines)
-	}
-	while (displayData.length > 1) {
-		let col1Lines = displayData.pop()
-		let col2Lines = displayData.pop()
-		for (let i = 0; i < col1Lines.length; i++) {
-			let col1 = col1Lines[i];
-			let col2 = col2Lines[i];
-			ns.print(col1 + '     ' + col2)
-		}
-	} // Then print any leftovers
-	for (const data of displayData) {
-		for (const line of data) {
-			ns.print(line)
-		}
-	}
-	ns.print('Worker Status')
-	ns.print(`Free: ${free}, Running: ${running}`)
 
 }
 
