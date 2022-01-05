@@ -6,10 +6,11 @@ const hackThreshold = 0.50 	// Don't start hacking unless a server has this perc
 const hackFactor = 0.20 	// Try to hack this percentage of money at a time
 const max_targets = 100;
 
-const script_purchaseServers = "/scripts/purchaseServers.js";
 const script_grow = "/scripts/growOnce.js";
 const script_weaken = "/scripts/weakenOnce.js";
 const script_hack = "/scripts/hackOnce.js";
+const logTypes = ["Targets1Up", "Targets2Up", "Long", "Short"]
+var logType = "Targets2Up"
 
 // Globals so we can access them from other running instances of this porgram if we like.
 var targets
@@ -18,7 +19,14 @@ var servers
 export async function main(_ns) {
 	ns = _ns;
 	// Do something with arguments
-	await runStart(ns);
+	if (ns.args[0]) {
+		if (ns.args[0] === "stop") runStop(ns);
+		else if (ns.args[0] === "start") await runStart(ns);
+		else if (ns.args[0] === "monitor") await runMonitor(ns);
+		else if (ns.args[0] === "log") await runChangeLogType(ns);
+	} else {
+		await runStart(ns);
+	}
 	ns.tprint("Goodnight, Gracie!")
 }
 
@@ -34,10 +42,7 @@ async function runMonitor(_ns) {
 async function runStop(_ns) {
 	ns = _ns
 	ns.kill(ns.getScriptName(), ns.getHostname(), "start")
-	ns.kill(ns.getScriptName(), ns.getHostname(), "run")
-	ns.kill(ns.getScriptName(), ns.getHostname(), "hack")
 	ns.kill(ns.getScriptName(), ns.getHostname(), "monitor")
-	ns.kill(ns.getScriptName(), ns.getHostname(), "status")
 	ns.kill(ns.getScriptName(), ns.getHostname())
 }
 
@@ -447,10 +452,6 @@ export async function rootServers(servers, _ns) {
 
 function validateScripts(ns) {
 	// Make sure the scripts all exist.
-	if (!ns.fileExists(script_purchaseServers, 'home')) {
-		ns.tprint(`Could not find script '${script_purchaseServers}`)
-		return
-	}
 	if (!ns.fileExists(script_grow, 'home')) {
 		ns.tprint(`Could not find script '${script_grow}`)
 		return
