@@ -3,12 +3,11 @@ import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarg
 let hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.20 	// Try to hack this percentage of money at a time
 let max_targets = 100;
+let sleep_time = 1000;
 
 const script_grow = "/scripts/growOnce.js";
 const script_weaken = "/scripts/weakenOnce.js";
 const script_hack = "/scripts/hackOnce.js";
-const logTypes = ["Targets1Up", "Targets2Up", "Long", "Short"]
-var logType = "Targets2Up"
 
 // Globals so we can access them from other running instances of this program if we like.
 var targets
@@ -19,24 +18,36 @@ export async function main(ns) {
 	// Do something with arguments
 	let args = ns.flags([
 		['start', false],
-		['display', 'Short'],
+		['stop', false],
 		['max_targets', 100],
 		['hackFactor', 0.20],
 		['hackThreshold', 0.50],
-		['stop', false],
+		['sleep_time', 1000],
+		['tail', false],
 	])
-	max_targets = args.max_targets;
-	logType = args.display;
-	hackFactor = args.hackFactor;
-	hackThreshold = args.hackThreshold;
 
 	if (args.stop) {
 		ns.tprint('Stopping any running controllers.')
 		runStop(ns);
 	} else if (args.start) {
+		max_targets = args.max_targets;
+		hackFactor = args.hackFactor;
+		hackThreshold = args.hackThreshold;
+		sleep_time = args.sleep_time
+		if (args.tail) {
+			ns.tail()
+		}
 		await runStart(ns);
-	} else if (args.monitor) {
-
+	} else {
+		let msg = `
+			Invalid flags.  Command line should include either:
+				--start To begin hacking, or
+				--stop to end all hacking instances.	
+			Optional with --start:
+				--max_targets, --hackFactor, --hackThreshold, --tail, sleep_time
+			`
+		ns.tprint(msg)
+		return
 	}
 }
 
@@ -49,7 +60,6 @@ function runStop(ns) {
 async function runStart(ns) {
 	targets = []
 	servers = {}
-	ns.tail()
 	ns.tprint('Starting hacking controller.')
 
 	ns.disableLog('getServerRequiredHackingLevel');
@@ -86,15 +96,6 @@ async function runStart(ns) {
 	firstTarget = evaluateTarget(firstTarget, playerInfo, ns)
 	targets.unshift(firstTarget)
 
-	// How many extra targets should we start with? 
-	let pool = getPoolFromServers(servers, ns)
-	let additionalTargets = Math.floor(pool.free / 2000)
-	additionalTargets = Math.min(additionalTargets, max_targets)
-	if (pool.free > 5000 && additionalTargets) {
-		addTargets(playerInfo, additionalTargets, ns);
-	}
-
-
 	//Set up a few timers (approx 30sec, 1min, 10min)
 	let on30 = 0, on60 = 0, on600 = 0
 	while (true) {
@@ -123,10 +124,10 @@ async function runStart(ns) {
 
 		// Allocate any free server slots
 		servers = await allocateThreads(servers, targets, ns)
-		pool = getPoolFromServers(servers, ns)
+		let pool = getPoolFromServers(servers, ns)
 
 		// Occasionally consider adding a new target
-		if (on30 == 0) {
+		if (on30 == 1) {
 			// If we have a bunch of free threads, go ahead and add new targets
 			let additionalTargets = Math.floor(pool.free / 1000) + 1
 			additionalTargets = Math.min(additionalTargets, max_targets - targets.length)
@@ -135,11 +136,8 @@ async function runStart(ns) {
 			}
 		}
 
-		// Display some status before we sleep
-		printFancyLog(ns)
-
 		// Sleep 
-		await ns.asleep(1 * 1000);
+		await ns.asleep(sleep_time);
 	} // End while(True)
 }
 
@@ -158,60 +156,6 @@ function addTargets(playerInfo, numTargets, ns) {
 	}
 }
 
-/** @param {import(".").NS } ns */
-function printFancyLog(ns) {
-	ns.clearLog()
-
-	let pool = getPoolFromServers(servers, ns)
-	for (const key in pool) {
-		pool[key] = ns.nFormat(pool[key], "0a");
-	}
-	// One column
-	if (logType === "Targets1Up") {
-		for (const target of targets) {
-			const lines = printfSeverAsTarget(target, ns)
-			for (const line of lines) {
-				ns.print(line)
-			}
-		}
-	} 
-	else if (logType == "Targets2Up") {
-		// Two-Column. Assumes everything is pretty uniform.
-		let displayData = []
-		for (const target of targets) {
-			const lines = printfSeverAsTarget(target, ns)
-			displayData.unshift(lines)
-		}
-		while (displayData.length > 1) {
-			let col1Lines = displayData.pop()
-			let col2Lines = displayData.pop()
-			for (let i = 0; i < col1Lines.length; i++) {
-				let col1 = col1Lines[i];
-				let col2 = col2Lines[i];
-				ns.print(col1 + '     ' + col2)
-			}
-		} // Then print any leftovers
-		for (const data of displayData) {
-			for (const line of data) {
-				ns.print(line)
-			}
-		}
-	} else if (logType === "Short") {
-		let script = ns.getRunningScript(ns.getScriptName(), ns.getHostname(), ...ns.args);
-		ns.print('Runtime: ' + ns.tFormat(script.onlineRunningTime * 1000))
-		let cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, "$0a")
-		ns.print(`Income: ${ns.nFormat(script.onlineMoneyMade, "$0a")} (${cps}/sec)`)
-		ns.print('')
-		ns.print(`Currently attacking ${targets.length} servers.`)
-	}
-
-	ns.print('Worker Status')
-	ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
-	ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
-	// hackThreshold, hackFactor, max_targets, logType
-	ns.print(`hT ${ns.nFormat(hackThreshold, "0%")}; hF ${ns.nFormat(hackFactor, "0.0%")}; #T ${max_targets}; lt '${logType}'`)
-
-}
 
 /** @param {import(".").NS } ns */
 export function getPoolFromServers(servers, ns) {
@@ -257,148 +201,78 @@ async function allocateThreads(servers, targets, ns) {
 	let allocatedHackThreads = 0, allocatedGrowThreads = 0, allocatedWeakenThreads = 0
 	// Allocate the attack threads first.
 	allocatedHackThreads = Math.min(freeSlots, totalDesiredHackThreads);
+	allocatedHackThreads = Math.max(allocatedHackThreads, 0)
 	let unallocatedSlots = freeSlots - allocatedHackThreads;
+
 	// Split up the rest of the slots in proportion to demand
 	const totalDesiredNonHackThreads = totalDesiredWeakenThreads + totalDesiredGrowThreads;
-	allocatedGrowThreads = Math.floor(unallocatedSlots * totalDesiredGrowThreads / totalDesiredNonHackThreads)
-	allocatedGrowThreads = Math.min(totalDesiredGrowThreads, allocatedGrowThreads)
+	if (totalDesiredNonHackThreads > freeSlots) {
+		allocatedGrowThreads = Math.floor(unallocatedSlots * totalDesiredGrowThreads / totalDesiredNonHackThreads)
+		allocatedGrowThreads = Math.min(totalDesiredGrowThreads, allocatedGrowThreads)
+		allocatedGrowThreads = Math.max(allocatedGrowThreads, 0)
 
-	allocatedWeakenThreads = Math.floor(unallocatedSlots * totalDesiredWeakenThreads / totalDesiredNonHackThreads)
-	allocatedWeakenThreads = Math.min(totalDesiredWeakenThreads, allocatedWeakenThreads)
+		allocatedWeakenThreads = Math.floor(unallocatedSlots * totalDesiredWeakenThreads / totalDesiredNonHackThreads)
+		allocatedWeakenThreads = Math.min(totalDesiredWeakenThreads, allocatedWeakenThreads)
+		allocatedWeakenThreads = Math.max(allocatedWeakenThreads, 0)
+	} else {
+		allocatedGrowThreads = totalDesiredGrowThreads;
+		allocatedWeakenThreads = totalDesiredWeakenThreads;
+	}
 	//ns.tprint(`Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`)
 	
-	// Allocate all hack threads first.
-	ns.print(`Allocating ${allocatedHackThreads} hack threads`)
-	for (const servername in servers) {
-		let server = servers[servername];
-		if (server.slots < 1) {
-			// No slots to allocate, so skip this server
-			continue;
-		}
-		if (allocatedHackThreads < 1){
-			// We're done assigning hack threads, so stop working on it.
-			break;
-		}
-		ns.print(`Server ${server.name} has ${server.slots} slots left to allocate, and there are ${allocatedHackThreads} left to assign.`)
-		// Find some targets to hack.
-		for (let i = 0; i < targets.length; i++) {
-			if (server.slots < 1) {
-				// We're out of slots, so move on to the next server.
-				break;
-			}
-			const target = targets[i];
-			let desired = (target.desiredHackThreads || 0) - (target.runningHackThreads || 0);
-			if (desired < (server.slots * 0.01))
-			{// Try not to allocate small workloads to servers with lots of capacity.
-				continue;
-			}
-			if (desired > 0) {
-				let alloc = Math.min(desired, allocatedHackThreads, server.slots)
-				ns.print(`  We would like to allocate ${alloc} threads from '${server.name}' to hack '${target.name}'.`)
-				if (alloc > 0) {
-					let retval = ns.exec(script_hack, server.name, alloc, target.name);
-					if (retval > 0) {
-						ns.print(`  Running ${alloc} threads from '${server.name}' to hack '${target.name}.`)
-						allocatedHackThreads -= alloc
-						server.slots -= alloc
-						target.runningHackThreads = (target.runningHackThreads || 0) + alloc
-						server.h = (server.h || 0) + alloc
-					} else {
-						ns.print(`Failed to exec hack from ${server.name} against ${target.name}.`)
-					}
-				}
-			}
-			targets[i] = target;
-		}
-		servers[servername] = server;
+	// Put things into variables they'll be easier to get later
+	let allocated = { hack: allocatedHackThreads, grow: allocatedGrowThreads, weaken: allocatedWeakenThreads }
+	let totalAllocated = allocated.hack + allocated.grow + allocated.weaken
+	let attackScripts = { hack: script_hack, grow: script_grow, weaken: script_weaken }
+	for (const target of targets) {
+		target.desired = { hack: target.desiredHackThreads, grow: target.desiredGrowThreads, weaken: target.desiredWeakenThreads }
+		target.running = { hack: target.runningHackThreads, grow: target.runningGrowThreads, weaken: target.runningWeakenThreads }
 	}
-
-	ns.print(`Allocating ${allocatedGrowThreads} grow threads`)
+	// Exec all the attack threads on servers
 	for (const servername in servers) {
 		let server = servers[servername];
-		if (server.slots < 1) {
-			// No slots to allocate, so skip this server
-			continue;
-		}
-		if (allocatedGrowThreads < 1) {
-			// We're done assigning grow threads, so stop working on it.
-			break;
-		}
-		ns.print(`Server ${server.name} has ${server.slots} slots left to allocate, and there are ${allocatedGrowThreads} left to assign.`)
-		// Find some targets to grow.
-		for (let i = 0; i < targets.length; i++) {
-			if (server.slots < 1) {
-				// We're out of slots, so move on to the next server.
-				break;
-			}
-			const target = targets[i];
-			let desired = (target.desiredGrowThreads || 0) - (target.runningGrowThreads || 0);
-			if (desired < (server.slots * 0.01)) {// Try not to allocate small workloads to servers with lots of capacity.
-				continue;
-			}
-			if (desired > 0) {
-				let alloc = Math.min(desired, allocatedGrowThreads, server.slots)
-				ns.print(`  We would like to allocate ${alloc} threads from '${server.name}' to grow '${target.name}'.`)
-				if (alloc > 0) {
-					let retval = ns.exec(script_grow, server.name, alloc, target.name);
-					if (retval > 0) {
-						ns.print(`  Running ${alloc} threads from '${server.name}' to grow '${target.name}.`)
-						allocatedGrowThreads -= alloc
-						server.slots -= alloc
-						target.runningGrowThreads = (target.runningGrowThreads || 0) + alloc
-						server.h = (server.h || 0) + alloc
-					} else {
-						ns.print(`Failed to exec grow from ${server.name} against ${target.name}.`)
-					}
-				}
-			}
-			targets[i] = target;
-		}
-		servers[servername] = server;
-	}
+		// If we don't have any slots left, move to the next server
+		if (server.slots < 1) continue;
 
-	ns.print(`Allocating ${allocatedWeakenThreads} weaken threads`)
-	for (const servername in servers) {
-		let server = servers[servername];
-		if (server.slots < 1) {
-			// No slots to allocate, so skip this server
-			continue;
-		}
-		if (allocatedWeakenThreads < 1) {
-			// We're done assigning weaken threads, so stop working on it.
-			break;
-		}
-		ns.print(`Server ${server.name} has ${server.slots} slots left to allocate, and there are ${allocatedWeakenThreads} left to assign.`)
-		// Find some targets to weaken.
-		for (let i = 0; i < targets.length; i++) {
-			if (server.slots < 1) {
-				// We're out of slots, so move on to the next server.
-				break;
-			}
-			const target = targets[i];
-			let desired = (target.desiredWeakenThreads || 0) - (target.runningWeakenThreads || 0);
-			if (desired < (server.slots * 0.01)) {// Try not to allocate small workloads to servers with lots of capacity.
-				continue;
-			}
-			if (desired > 0) {
-				let alloc = Math.min(desired, allocatedWeakenThreads, server.slots)
-				ns.print(`  We would like to allocate ${alloc} threads from '${server.name}' to weaken '${target.name}'.`)
-				if (alloc > 0) {
-					let retval = ns.exec(script_weaken, server.name, alloc, target.name);
+		totalAllocated = allocated.hack + allocated.grow + allocated.weaken
+		// If we don't have anything left to assign, quit.
+		if (totalAllocated < 1) break;
+
+		ns.print(`Server ${server.name} has ${server.slots} for attack threads.`)
+		for (const target of targets) {
+			for (const attackType of ['hack', 'weaken', 'grow']) {
+				let desired = Math.min(
+					target.desired[attackType] - target.running[attackType],
+					allocated[attackType],
+					server.slots,
+				)
+				if (desired > 0) {
+					let retval = ns.exec(attackScripts[attackType], server.name, desired, target.name, ns.getTimeSinceLastAug());
 					if (retval > 0) {
-						ns.print(`  Running ${alloc} threads from '${server.name}' to weaken '${target.name}.`)
-						allocatedWeakenThreads -= alloc
-						server.slots -= alloc
-						target.runningWeakenThreads = (target.runningWeakenThreads || 0) + alloc
-						server.h = (server.h || 0) + alloc
-					} else {
-						ns.print(`Failed to exec weaken from ${server.name} against ${target.name}.`)
-					}
+						allocated[attackType] -= desired
+						server.slots -= desired
+						target.running[attackType] = target.running[attackType] + desired
+						switch (attackType) {
+							case 'hack':
+								server.h = (server.h || 0) + desired
+								target.runningHackThreads = (target.runningHackThreads||0) + desired
+								break;
+							case 'grow':
+								server.g = (server.g||0) + desired
+								target.runningGrowThreads = (target.runningGrowThreads||0) + desired
+								break;
+							case 'weaken':
+								server.w = (server.w||0) + desired
+								target.runningWeakenThreads = (target.runningWeakenThreads||0) + desired
+								break;
+							default:
+								break;
+						}
+					} // end if succeeded.
 				}
-			}
-			targets[i] = target;
+			} 
 		}
-		servers[servername] = server;
+		servers[servername] = server
 	}
 
 	return servers
