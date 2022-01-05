@@ -1,7 +1,5 @@
-/** @type import(".").NS */
-let ns = null;
-
 import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "scripts/bitlib.js";
+
 let hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.20 	// Try to hack this percentage of money at a time
 let max_targets = 100;
@@ -16,8 +14,8 @@ var logType = "Targets2Up"
 var targets
 var servers
 
-export async function main(_ns) {
-	ns = _ns;
+/** @param {import(".").NS } ns */
+export async function main(ns) {
 	// Do something with arguments
 	let args = ns.flags([
 		['start', false],
@@ -42,13 +40,13 @@ export async function main(_ns) {
 	}
 }
 
-function runStop(_ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+function runStop(ns) {
 	ns.scriptKill(ns.getScriptName(), ns.getHostname())
 }
 
-async function runStart(_ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+async function runStart(ns) {
 	targets = []
 	servers = {}
 	ns.tail()
@@ -67,11 +65,11 @@ async function runStart(_ns) {
 
 	validateScripts(ns);
 
-	let playerInfo = await getPlayerInfo(ns);
-//	let servers = await getAllServerInfo({}, ns);
-	servers = await getAllServerInfo({}, ns);
+	let playerInfo = getPlayerInfo(ns);
+	servers = getAllServerInfo({}, ns);
+
 	// Force a root check on available servers
-	servers = await rootServers(servers, ns)
+	servers = rootServers(servers, ns)
 
 	// Distribute fresh copies of attack scripts to all servers
 	for (const servername in servers) {
@@ -106,7 +104,7 @@ async function runStart(_ns) {
 
 		// Root any available servers
 		const oldExploitCount = playerInfo.exploits
-		playerInfo = await getPlayerInfo(ns);
+		playerInfo = getPlayerInfo(ns);
 		if (oldExploitCount != playerInfo.exploits || on60 == 0) {
 			// We either have a new exploit, or it's been a little while.
 			// Let's refresh our server info, and make sure there's nothing new to root.
@@ -159,8 +157,8 @@ function addTargets(playerInfo, numTargets) {
 	}
 }
 
-function printFancyLog(_ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+function printFancyLog(ns) {
 	ns.clearLog()
 
 	let pool = getPoolFromServers(servers, ns)
@@ -214,8 +212,8 @@ function printFancyLog(_ns) {
 
 }
 
-function getPoolFromServers(servers, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function getPoolFromServers(servers, ns) {
 	let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 }
 	for (const server in servers) {
 		const info = servers[server];
@@ -233,63 +231,13 @@ function getPoolFromServers(servers, _ns) {
 	return pool;
 }
 
-async function allocateThreads(servers, targets, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+async function allocateThreads(servers, targets, ns) {
 	ns.print('Allocating attack threads.')
 	
 	// Make sure our notion of running attack threads against each target matches reality.
 	// First, reset all our assumptions
-	for (const servername in servers) {
-		let server = servers[servername]
-		server.w = 0
-		server.h = 0
-		server.g = 0
-		servers[servername] = server
-	} // End loop over servers
-	for (let target of targets) {
-		target.runningWeakenThreads = 0
-		target.runningHackThreads = 0
-		target.runningGrowThreads = 0
-	} // End loop over targets
-	
-	// Then reset by querying all the servers
-	for (const servername in servers) {
-		let server = servers[servername]
-		// Pull fresh server info
-		server = { ...server, ...getServerInfo(server.name, ns) }
-
-		// Query the server to see what attack threads it is running.
-		let ps = ns.ps(server.name)
-
-
-		// Query the server to see what attack threads it is running.
-		for (let target of targets) {
-			let wThreads = 0
-			const wscript = ns.getRunningScript(script_weaken, server.name, target.name)
-			if (wscript != null) {
-				wThreads = wscript.threads || 0
-			}
-			server.w += wThreads
-			target.runningWeakenThreads += wThreads
-
-			let hThreads = 0
-			const hscript = ns.getRunningScript(script_hack, server.name, target.name)
-			if (hscript!=null){
-				hThreads = hscript.threads || 0
-			}
-			server.h += hThreads
-			target.runningHackThreads +=hThreads
-
-			let gThreads = 0
-			const gscript = ns.getRunningScript(script_grow, server.name, target.name)
-			if (gscript != null) {
-				gThreads = gscript.threads || 0
-			}
-			server.g += gThreads
-			target.runningGrowThreads += gThreads
-		} // End loop over targets
-		servers[servername] = server
-	} // End loop over servers
+	getAttackStatus(servers, targets, ns); // End loop over servers
 
 	let freeSlots = 0
 	for (const server in servers) {
@@ -455,18 +403,63 @@ async function allocateThreads(servers, targets, _ns) {
 	return servers
 }
 
-export async function rootServers(servers, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function getAttackStatus(servers, targets, ns) {
+	for (const servername in servers) {
+		let server = servers[servername];
+		server.w = 0;
+		server.h = 0;
+		server.g = 0;
+		servers[servername] = server;
+	} // End loop over servers
+	for (let target of targets) {
+		target.runningWeakenThreads = 0;
+		target.runningHackThreads = 0;
+		target.runningGrowThreads = 0;
+	} // End loop over targets
+
+
+	// Then reset by querying all the servers
+	for (const servername in servers) {
+		let server = servers[servername];
+		// Pull fresh server info
+		server = { ...server, ...getServerInfo(server.name, ns) };
+		// Query the server to see what attack threads it is running.
+		let procs = ns.ps(server.name) 
+		while(procs.length > 0) {
+			const proc = procs.pop()
+			if (proc.filename == script_weaken) {
+				let target = targets.find(target => target.name == proc.args[0])
+				if (target) target.runningWeakenThreads += proc.threads;
+				server.w += proc.threads
+			}
+			if (proc.filename == script_grow) {
+				let target = targets.find(target => target.name == proc.args[0])
+				if (target) target.runningGrowThreads += proc.threads;
+				server.g += proc.threads
+			}
+			if (proc.filename == script_hack) {
+				let target = targets.find(target => target.name == proc.args[0])
+				if (target) target.runningHackThreads += proc.threads;
+				server.h += proc.threads
+			}
+		}
+		servers[servername] = server;
+	}
+}
+
+/** @param {import(".").NS } ns */
+export function rootServers(servers, ns) {
 	for (const server in servers) {
 		const info = servers[server]
 		// Try to root any servers we haven't gotten yet.
 		if (!info.rooted) {
-			const success = await root(server, ns)
+			const success = root(server, ns)
 			if (success) {
 				// merge existing data so we don't lose thread counts
 				servers[server] = {
 					...info,
-					...await getServerInfo(server, ns)
+					...getServerInfo(server, ns)
 				}
 			}
 		}
@@ -489,8 +482,9 @@ function validateScripts(ns) {
 		return
 	}
 }
-export function findTargets(servers, playerInfo, _ns) {
-	ns = _ns
+
+/** @param {import(".").NS } ns */
+export function findTargets(servers, playerInfo, ns) {
 	let targets = []
 	// Calculate a theoretical profitiablity score for each server
 	for (const server in servers) {
@@ -506,8 +500,8 @@ export function findTargets(servers, playerInfo, _ns) {
 	return targets
 }
 
-export function evaluateTarget(server, playerInfo, _ns) {
-	ns = _ns;
+/** @param {import(".").NS } ns */
+export function evaluateTarget(server, playerInfo, ns) {
 	// We can only hack servers that are rooted, and that have a level lower than our level.
 	if (server.levelRequired <= playerInfo.level && server.rooted) {
 		server.score = server.maxMoney * server.hackFactor / server.securityBase;
@@ -516,7 +510,7 @@ export function evaluateTarget(server, playerInfo, _ns) {
 		}
 
 		if (server.currentMoney / server.maxMoney > hackThreshold) {
-			let desiredHackFactor = hackFactor // percentage to steal per hacking cycle. Default 10%
+			let desiredHackFactor = hackFactor // percentage to steal per hacking cycle
 			server.desiredHackThreads = Math.ceil(desiredHackFactor / server.hackFactor)
 			server.desiredHackThreads = Math.max(server.desiredHackThreads, 0)
 		} else {
@@ -557,8 +551,8 @@ export function evaluateTarget(server, playerInfo, _ns) {
 	return server;
 }
 
-function checkC2Ports(_ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+function checkC2Ports(ns) {
 	// To start with, we can allow adjusting some of our global parameters via c2:
 	// hackThreshold, hackFactor, max_targets, logType
 	let commands = []

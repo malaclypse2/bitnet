@@ -1,10 +1,7 @@
-/** @type import(".").NS */
-let ns = null;
 export const worker_size = 2.0 	// in GB
 
-export async function main(_ns) {
-	ns = _ns;
-	
+/** @param {import(".").NS } ns */
+export async function main(ns) {
 	ns.tprint("No user servicable parts inside.")
 	
 	ns.tprint("getPlayerInfo:")
@@ -26,8 +23,8 @@ export async function main(_ns) {
 	}
 }
 
-export function getPlayerInfo(_ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function getPlayerInfo(ns) {
 	return {
 		level: ns.getHackingLevel(),
 		exploits: getProgramCount(ns),
@@ -45,16 +42,17 @@ export function pad(pad, str, padLeft) {
 	}
 }
 
-export function tprintServerAsTarget(server, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function tprintServerAsTarget(server, ns) {
 	const lines = printfSeverAsTarget(server, ns)
 	for (const line of lines) {
 		ns.tprint(line)
 	}
 
 }
-export function printfSeverAsTarget(server, _ns){
-	ns = _ns
+
+/** @param {import(".").NS } ns */
+export function printfSeverAsTarget(server, ns){
 	// Try to keep it to two or three lines per server, or it will never fit in a log window, even with just a few targets
 	const moneyCur = ns.nFormat(server.currentMoney, "$0.0a")
 	const moneyPercent = pad('   ', ns.nFormat(100*server.currentMoney / server.maxMoney, "0"), true)+'%'
@@ -86,8 +84,8 @@ export function printfSeverAsTarget(server, _ns){
 	return [line1, line2, line3]
 }
 
-export function getServerInfo(server, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function getServerInfo(server, ns) {
 	let ram = ns.getServerMaxRam(server)
 	let freeRam = ram - ns.getServerUsedRam(server)
 	let rooted = ns.hasRootAccess(server)
@@ -132,8 +130,8 @@ export function getServerNames(ns) {
 	return list;
 }
 
-export function getAllServerInfo(servers, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function getAllServerInfo(servers, ns) {
 	servers['home'] = {...servers['home'], ...getServerInfo('home', ns)}
 
 	let foundServers = getServerNames(ns);
@@ -144,6 +142,7 @@ export function getAllServerInfo(servers, _ns) {
 	return servers
 }
 
+/** @param {import(".").NS } ns */
 export function getProgramCount(ns) {
 	let count = 0;
 	if (ns.fileExists('BruteSSH.exe', 'home'))
@@ -160,8 +159,8 @@ export function getProgramCount(ns) {
 	return count;
 }
 
-export function root(target, _ns) {
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function root(target, ns) {
 	let exploits = getProgramCount(ns);
 	let needed = ns.getServerNumPortsRequired(target);
 	if (exploits >= needed) {
@@ -181,8 +180,8 @@ export function root(target, _ns) {
 	return 0;
 }
 
-export function stopscript(servers, script,_ns){
-	ns = _ns
+/** @param {import(".").NS } ns */
+export function stopscript(servers, script, ns){
 	for (const servername in servers) {
 		ns.scriptKill(script, servername)
 	}
