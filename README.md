@@ -6,8 +6,11 @@ Tagged releases probably work. The main branch may or may not work at any given 
 
 Everything expects to live in the /scripts/ directory.
 
-bitlib.js tries to consolidate non-application specific code
 net-hack.js runs an automated hacking system
+
+net-monitor.js runs some semi-fancy monitors of what net-hack is doing.
+
+bitlib.js tries to consolidate non-application specific code
 
 growOnce.js, weakenOnce.js, and hackOnce.js are the attack scripts that are copied out to the attack servers.
 
