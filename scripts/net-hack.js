@@ -1,7 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "/scripts/bitlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "scripts/bitlib.js";
 let hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.20 	// Try to hack this percentage of money at a time
 let max_targets = 100;
@@ -21,7 +21,7 @@ export async function main(_ns) {
 	// Do something with arguments
 	let args = ns.flags([
 		['start', false],
-		['display', 'Targets2Up'],
+		['display', 'Short'],
 		['max_targets', 100],
 		['hackFactor', 0.20],
 		['hackThreshold', 0.50],
@@ -45,7 +45,6 @@ export async function main(_ns) {
 function runStop(_ns) {
 	ns = _ns
 	ns.scriptKill(ns.getScriptName(), ns.getHostname())
-	ns.ps('home')
 }
 
 async function runStart(_ns) {
@@ -64,6 +63,7 @@ async function runStart(_ns) {
 	ns.disableLog('getServerSecurityLevel');
 	ns.disableLog('getHackingLevel');
 	ns.disableLog('sleep');
+	ns.disableLog('asleep');
 
 	validateScripts(ns);
 
@@ -255,7 +255,14 @@ async function allocateThreads(servers, targets, _ns) {
 	// Then reset by querying all the servers
 	for (const servername in servers) {
 		let server = servers[servername]
+		// Pull fresh server info
 		server = { ...server, ...getServerInfo(server.name, ns) }
+
+		// Query the server to see what attack threads it is running.
+		let ps = ns.ps(server.name)
+
+
+		// Query the server to see what attack threads it is running.
 		for (let target of targets) {
 			let wThreads = 0
 			const wscript = ns.getRunningScript(script_weaken, server.name, target.name)
@@ -501,7 +508,8 @@ export function findTargets(servers, playerInfo, _ns) {
 
 export function evaluateTarget(server, playerInfo, _ns) {
 	ns = _ns;
-	if (server.levelRequired <= playerInfo.level) {
+	// We can only hack servers that are rooted, and that have a level lower than our level.
+	if (server.levelRequired <= playerInfo.level && server.rooted) {
 		server.score = server.maxMoney * server.hackFactor / server.securityBase;
 		if (server.score == 0) {
 			return server;
