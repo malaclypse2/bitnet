@@ -104,7 +104,7 @@ export function getServerInfo(server, ns) {
 	let slots = 0
 	// Exclude unrooted and very large servers from the worker pool. 
 	// Unrooted servers can't run programs, and very large server deserve their own codebase
-	if (rooted && (ram < 2048)) {
+	if (rooted && (ram < big_iron_size)) {
 		slots = Math.floor(freeRam / worker_size)
 	}
 	return {
@@ -198,5 +198,48 @@ export function root(target, ns) {
 export function stopscript(servers, script, ns){
 	for (const servername in servers) {
 		ns.scriptKill(script, servername)
+	}
+}
+
+export function print3Up(displayData, ns) {
+	// Two-Column. Assumes everything is pretty uniform. And pretty narrow.
+	let n = 3
+	while (displayData.length >= n) {
+		let columns = Array(n).map(x => displayData.pop())
+		for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
+			let line = ''
+			for (let colNum = 0; colNum < columns.length; colNum++) {
+				if (colNum > 0) line += '  '
+				line += columns[colNum]
+			}
+			ns.print(line);
+		}
+	}
+	if (displayData.length > 0) {
+		print2Up(displayData, ns)
+	}
+}
+
+export function print2Up(displayData, ns) {
+	// Two-Column. Assumes everything is pretty uniform.
+	while (displayData.length >= 2) {
+		let col1Lines = displayData.pop();
+		let col2Lines = displayData.pop();
+		for (let i = 0; i < col1Lines.length; i++) {
+			let col1 = col1Lines[i];
+			let col2 = col2Lines[i];
+			ns.print(col1 + '   ' + col2);
+		}
+	}
+	if (displayData.length > 0) {
+		print1Up(displayData, ns)
+	}
+}
+
+export function print1Up(displayData, ns) {
+	for (const data of displayData) {
+		for (const line of data) {
+			ns.print(line);
+		}
 	}
 }

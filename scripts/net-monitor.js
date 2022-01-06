@@ -1,4 +1,4 @@
-import { getPlayerInfo, getAllServerInfo, getServerInfo, printfSeverAsTarget } from "scripts/bitlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, printfSeverAsTarget, print1Up, print2Up, print3Up } from "scripts/bitlib.js";
 import { findTargets, getAttackStatus, getPoolFromServers } from "scripts/net-hack.js";
 
 const displayTypes = ["Short", "Targets1Up", "Targets2Up", "Servers2Up", "Servers3Up"]
@@ -167,46 +167,4 @@ export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) 
 	ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
 }
 
-function print3Up(displayData, ns) {
-	// Two-Column. Assumes everything is pretty uniform. And pretty narrow.
-	let n = 3
-	while (displayData.length >= n) {
-		let columns = Array(n).map( x => displayData.pop() )
-		for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
-			let line = ''
-			for (let colNum = 0; colNum < columns.length; colNum++) {
-				if (colNum > 0) line += '  '
-				line += columns[colNum]
-			}
-			ns.print(line);
-		}
-	}
-	if (displayData.length > 0 ){
-		print2Up(displayData, ns)
-	}
-}
-
-function print2Up(displayData, ns) {
-// Two-Column. Assumes everything is pretty uniform.
-	while (displayData.length >= 2) {
-		let col1Lines = displayData.pop();
-		let col2Lines = displayData.pop();
-		for (let i = 0; i < col1Lines.length; i++) {
-			let col1 = col1Lines[i];
-			let col2 = col2Lines[i];
-			ns.print(col1 + '   ' + col2);
-		}
-	}
-	if (displayData.length > 0)  {
-		print1Up(displayData, ns)
-	}
-}
-
-function print1Up(displayData, ns) {
-	for (const data of displayData) {
-		for (const line of data) {
-			ns.print(line);
-		}
-	}
-}
 
