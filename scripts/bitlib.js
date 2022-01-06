@@ -65,7 +65,7 @@ export function printfSeverAsTarget(server, ns) {
     const hacksWanted = ns.nFormat(server.desired.hack, '0');
     const growsRunning = ns.nFormat(server.running.grow, '0');
     const growsWanted = ns.nFormat(server.desired.grow, '0');
-    const weakensRunning = ns.nFormat(server.running.grow, '0');
+    const weakensRunning = ns.nFormat(server.running.weaken, '0');
     const weakensWanted = ns.nFormat(server.desired.weaken, '0');
 
     const hackStr = pad(Array(16).join('─'), `Hack ${hacksRunning}/${hacksWanted}├`);
@@ -139,6 +139,12 @@ export class Server {
         this.securityBase = ns.getServerMinSecurityLevel(servername);
         this.securityCurrent = ns.getServerSecurityLevel(servername);
         this.levelRequired = ns.getServerRequiredHackingLevel(servername);
+    }
+    resetRunningThreadCounts() {
+        this.running = { hack: 0, grow: 0, weaken: 0 };
+        this.w = 0;
+        this.g = 0;
+        this.h = 0;
     }
 }
 

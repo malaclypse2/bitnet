@@ -185,24 +185,27 @@ async function allocateThreads(servers, targets, ns) {
 
     // Make sure our notion of running attack threads against each target matches reality.
     // First, reset all our assumptions
-    getAttackStatus(servers, targets, ns); 
+    getAttackStatus(servers, targets, ns);
 
     let freeSlots = 0;
     for (const server in servers) {
         freeSlots += servers[server].slots || 0;
     }
+    let totalDesiredHackThreads = 0;
+    let totalDesiredWeakenThreads = 0;
+    let totalDesiredGrowThreads = 0;
 
-    let totalDesiredHackThreads = targets.reduce((sum, target) => sum + target.desired.hack, 0);
-    totalDesiredHackThreads -= targets.reduce((sum, target) => sum + target.running.hack, 0);
-    totalDesiredHackThreads = Math.max(totalDesiredHackThreads, 0);
+    for (const target of targets) {
+        let delta = {};
+        delta.h = target.desired.hack - target.running.hack;
+        delta.w = target.desired.weaken - target.running.weaken;
+        delta.g = target.desired.grow - target.running.grow;
 
-    let totalDesiredGrowThreads = targets.reduce((sum, target) => sum + target.desired.grow, 0);
-    totalDesiredGrowThreads -= targets.reduce((sum, target) => sum + target.running.grow, 0);
-    totalDesiredGrowThreads = Math.max(totalDesiredGrowThreads, 0);
-
-    let totalDesiredWeakenThreads = targets.reduce((sum, target) => sum + target.desired.weaken, 0);
-    totalDesiredGrowThreads -= targets.reduce((sum, target) => sum + target.running.weaken, 0);
-    totalDesiredWeakenThreads = Math.max(totalDesiredWeakenThreads, 0);
+        if (delta.h > 0) totalDesiredHackThreads += delta.h;
+        if (delta.w > 0) totalDesiredWeakenThreads += delta.w;
+        if (delta.g > 0) totalDesiredGrowThreads += delta.g;
+		ns.print(`S: ${target.name} H: ${target.desired.hack} G: ${target.desired.grow} W: ${target.desired.weaken}`);
+    }
 
     ns.print(
         `Want to assign ${totalDesiredHackThreads} hack threads, ${totalDesiredWeakenThreads} weaken threads, and ${totalDesiredGrowThreads} grow threads in ${freeSlots} free slots.`
@@ -232,7 +235,9 @@ async function allocateThreads(servers, targets, ns) {
         allocatedGrowThreads = totalDesiredGrowThreads;
         allocatedWeakenThreads = totalDesiredWeakenThreads;
     }
-    ns.print(`Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`)
+    ns.print(
+        `Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`
+    );
 
     // Put things into variables they'll be easier to get later
     let allocated = { hack: allocatedHackThreads, grow: allocatedGrowThreads, weaken: allocatedWeakenThreads };
@@ -297,11 +302,18 @@ async function allocateThreads(servers, targets, ns) {
 
 /** @param {import(".").NS } ns */
 export function getAttackStatus(servers, targets, ns) {
+    for (const servername in servers) {
+        const server = servers[servername];
+		server.resetRunningThreadCounts()
+		server.update(ns)
+    }
+	for (const target of targets) {
+		target.resetRunningThreadCounts()
+		target.update(ns)
+	}
     // Then reset by querying all the servers
     for (const servername in servers) {
         let server = servers[servername];
-        // Pull fresh server info
-        server.update(ns);
         // Query the server to see what attack threads it is running.
         let procs = ns.ps(server.name);
         while (procs.length > 0) {
