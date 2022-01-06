@@ -3,20 +3,20 @@ const big_iron_size = 204800000; // in GB. Any servers larger than this will get
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    ns.tprint("No user servicable parts inside.");
+    ns.tprint('No user servicable parts inside.');
 
-    ns.tprint("getPlayerInfo:");
+    ns.tprint('getPlayerInfo:');
     let playerInfo = getPlayerInfo(ns);
     ns.tprint(JSON.stringify(playerInfo));
 
     ns.tprint("getServerInfo('n00dles')");
-    ns.tprint(JSON.stringify(getServerInfo("n00dles", ns)));
+    ns.tprint(JSON.stringify(getServerInfo('n00dles', ns)));
 
-    ns.tprint("getAllServerInfo:");
+    ns.tprint('getAllServerInfo:');
     let servers = getAllServerInfo({}, ns);
     ns.tprint(JSON.stringify(servers));
 
-    ns.tprint("findTargets:");
+    ns.tprint('findTargets:');
     let targets = findTargets(servers, playerInfo, ns).slice(5);
     for (const target of targets) {
         ns.tprint(target);
@@ -29,12 +29,12 @@ export function getPlayerInfo(ns) {
     return {
         level: ns.getHackingLevel(),
         exploits: getProgramCount(ns),
-        moneyAvailable: ns.getServerMoneyAvailable("home"),
+        moneyAvailable: ns.getServerMoneyAvailable('home'),
     };
 }
 
 export function pad(pad, str, padLeft) {
-    if (typeof str === "undefined") return pad;
+    if (typeof str === 'undefined') return pad;
     if (padLeft) {
         return (pad + str).slice(-pad.length);
     } else {
@@ -53,50 +53,32 @@ export function tprintServerAsTarget(server, ns) {
 /** @param {import(".").NS } ns */
 export function printfSeverAsTarget(server, ns) {
     // Try to keep it to two or three lines per server, or it will never fit in a log window, even with just a few targets
-    const moneyCur = ns.nFormat(server.currentMoney, "$0.0a");
-    const moneyPercent =
-        pad(
-            "   ",
-            ns.nFormat((100 * server.currentMoney) / server.maxMoney, "0"),
-            true
-        ) + "%";
+    const moneyCur = ns.nFormat(server.currentMoney, '$0.0a');
+    const moneyPercent = pad('   ', ns.nFormat((100 * server.currentMoney) / server.maxMoney, '0'), true) + '%';
     const moneyStr = `${moneyCur} (${moneyPercent})`;
 
-    const secBase = pad("  ", ns.nFormat(server.securityBase, "0"), true);
-    const secIncr = pad(
-        "    ",
-        ns.nFormat(server.securityCurrent - server.securityBase, "0.0")
-    );
+    const secBase = pad('  ', ns.nFormat(server.securityBase, '0'), true);
+    const secIncr = pad('    ', ns.nFormat(server.securityCurrent - server.securityBase, '0.0'));
     const secStr = `Sec ${secBase} +${secIncr}`;
 
-    const hacksRunning = ns.nFormat(server.runningHackThreads || 0, "0");
-    const hacksWanted = ns.nFormat(server.desiredHackThreads || 0, "0");
-    const growsRunning = ns.nFormat(server.runningGrowThreads || 0, "0");
-    const growsWanted = ns.nFormat(server.desiredGrowThreads || 0, "0");
-    const weakensRunning = ns.nFormat(server.runningWeakenThreads || 0, "0");
-    const weakensWanted = ns.nFormat(server.desiredWeakenThreads || 0, "0");
+    const hacksRunning = ns.nFormat(server.runningHackThreads || 0, '0');
+    const hacksWanted = ns.nFormat(server.desiredHackThreads || 0, '0');
+    const growsRunning = ns.nFormat(server.runningGrowThreads || 0, '0');
+    const growsWanted = ns.nFormat(server.desiredGrowThreads || 0, '0');
+    const weakensRunning = ns.nFormat(server.runningWeakenThreads || 0, '0');
+    const weakensWanted = ns.nFormat(server.desiredWeakenThreads || 0, '0');
 
-    const hackStr = pad(
-        Array(16).join("─"),
-        `Hack ${hacksRunning}/${hacksWanted}├`
-    );
-    const growStr = pad(
-        Array(17).join("─"),
-        `┤Grow ${growsRunning}/${growsWanted}├`
-    );
-    const weakenStr = pad(
-        Array(18).join("─"),
-        `┤Weaken ${weakensRunning}/${weakensWanted}`,
-        true
-    );
+    const hackStr = pad(Array(16).join('─'), `Hack ${hacksRunning}/${hacksWanted}├`);
+    const growStr = pad(Array(17).join('─'), `┤Grow ${growsRunning}/${growsWanted}├`);
+    const weakenStr = pad(Array(18).join('─'), `┤Weaken ${weakensRunning}/${weakensWanted}`, true);
 
     let line1 = `╭─┤`;
-    line1 += pad(Array(17).join("─"), server.name + "├");
-    line1 += pad(Array(17).join("─"), "┤ " + moneyStr, true) + " ├─";
-    line1 += "┤" + secStr + `├─╮`;
+    line1 += pad(Array(17).join('─'), server.name + '├');
+    line1 += pad(Array(17).join('─'), '┤ ' + moneyStr, true) + ' ├─';
+    line1 += '┤' + secStr + `├─╮`;
 
     let line2 = `╰─┤${hackStr}${growStr}${weakenStr}├─╯`;
-    let line3 = "";
+    let line3 = '';
 
     return [line1, line2, line3];
 }
@@ -107,7 +89,7 @@ export function printfServer(server, ns) {
     let lines = new Array(5);
 
     lines[0] = `╭─┤`;
-    lines[0] += pad(Array(17).join("─"), server.name + "├");
+    lines[0] += pad(Array(17).join('─'), server.name + '├');
 
     return lines;
 }
@@ -131,12 +113,12 @@ export function Server(servername, ns) {
     this.securityBase = ns.getServerMinSecurityLevel(servername);
     this.securityCurrent = ns.getServerSecurityLevel(servername);
     this.levelRequired = ns.getServerRequiredHackingLevel(servername);
-	this.desired = {hack: 0, grow: 0, weaken: 0}
-	this.running = {hack: 0, grow: 0, weaken: 0}
-	this.score = 0
-	this.w = 0
-	this.g = 0
-	this.h = 0
+    this.desired = { hack: 0, grow: 0, weaken: 0 };
+    this.running = { hack: 0, grow: 0, weaken: 0 };
+    this.score = 0;
+    this.w = 0;
+    this.g = 0;
+    this.h = 0;
 }
 
 /** @param {import(".").NS } ns */
@@ -163,8 +145,8 @@ export function getServerInfo(server, ns) {
         securityBase: ns.getServerMinSecurityLevel(server),
         securityCurrent: ns.getServerSecurityLevel(server),
         levelRequired: ns.getServerRequiredHackingLevel(server),
-		desired: {hack: 0, grow: 0, weaken: 0},
-		running: {hack: 0, grow: 0, weaken: 0},
+        desired: { hack: 0, grow: 0, weaken: 0 },
+        running: { hack: 0, grow: 0, weaken: 0 },
     };
 }
 
@@ -182,13 +164,13 @@ function scan(ns, parent, server, list) {
 
 export function getServerNames(ns) {
     const list = [];
-    scan(ns, "", "home", list);
+    scan(ns, '', 'home', list);
     return list;
 }
 
 /** @param {import(".").NS } ns */
 export function getAllServerInfo(servers, ns) {
-    servers["home"] = { ...servers["home"], ...getServerInfo("home", ns) };
+    servers['home'] = { ...servers['home'], ...getServerInfo('home', ns) };
 
     let foundServers = getServerNames(ns);
     for (const server of foundServers) {
@@ -201,11 +183,11 @@ export function getAllServerInfo(servers, ns) {
 /** @param {import(".").NS } ns */
 export function getProgramCount(ns) {
     let count = 0;
-    if (ns.fileExists("BruteSSH.exe", "home")) count++;
-    if (ns.fileExists("FTPCrack.exe", "home")) count++;
-    if (ns.fileExists("relaySMTP.exe", "home")) count++;
-    if (ns.fileExists("HTTPWorm.exe", "home")) count++;
-    if (ns.fileExists("SQLInject.exe", "home")) count++;
+    if (ns.fileExists('BruteSSH.exe', 'home')) count++;
+    if (ns.fileExists('FTPCrack.exe', 'home')) count++;
+    if (ns.fileExists('relaySMTP.exe', 'home')) count++;
+    if (ns.fileExists('HTTPWorm.exe', 'home')) count++;
+    if (ns.fileExists('SQLInject.exe', 'home')) count++;
 
     return count;
 }
@@ -215,11 +197,11 @@ export function root(target, ns) {
     let exploits = getProgramCount(ns);
     let needed = ns.getServerNumPortsRequired(target);
     if (exploits >= needed) {
-        if (ns.fileExists("BruteSSH.exe", "home")) ns.brutessh(target);
-        if (ns.fileExists("FTPCrack.exe", "home")) ns.ftpcrack(target);
-        if (ns.fileExists("relaySMTP.exe", "home")) ns.relaysmtp(target);
-        if (ns.fileExists("HTTPWorm.exe", "home")) ns.httpworm(target);
-        if (ns.fileExists("SQLInject.exe", "home")) ns.sqlinject(target);
+        if (ns.fileExists('BruteSSH.exe', 'home')) ns.brutessh(target);
+        if (ns.fileExists('FTPCrack.exe', 'home')) ns.ftpcrack(target);
+        if (ns.fileExists('relaySMTP.exe', 'home')) ns.relaysmtp(target);
+        if (ns.fileExists('HTTPWorm.exe', 'home')) ns.httpworm(target);
+        if (ns.fileExists('SQLInject.exe', 'home')) ns.sqlinject(target);
         ns.nuke(target);
         return 1;
     }
@@ -239,9 +221,9 @@ export function print3Up(displayData, ns) {
     while (displayData.length >= n) {
         let columns = Array(n).map((x) => displayData.pop());
         for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
-            let line = "";
+            let line = '';
             for (let colNum = 0; colNum < columns.length; colNum++) {
-                if (colNum > 0) line += "  ";
+                if (colNum > 0) line += '  ';
                 line += columns[colNum];
             }
             ns.print(line);
@@ -260,7 +242,7 @@ export function print2Up(displayData, ns) {
         for (let i = 0; i < col1Lines.length; i++) {
             let col1 = col1Lines[i];
             let col2 = col2Lines[i];
-            ns.print(col1 + "   " + col2);
+            ns.print(col1 + '   ' + col2);
         }
     }
     if (displayData.length > 0) {
