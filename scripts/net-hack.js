@@ -1,4 +1,4 @@
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root } from 'scripts/bitlib.js';
+import { getPlayerInfo, getAllServerInfo, Server, root } from 'scripts/bitlib.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.2; // Try to hack this percentage of money at a time
@@ -120,7 +120,7 @@ async function runStart(ns) {
         for (let i = 0; i < targets.length; i++) {
             let target = targets[i];
             // Update server information
-            target = { ...target, ...new Server(target.name, ns) };
+            target.update(ns);
             // Re-evaluate targetting criteria, including desired attack threads
             target = await evaluateTarget(target, playerInfo, ns);
             targets[i] = target;
@@ -300,24 +300,11 @@ async function allocateThreads(servers, targets, ns) {
 
 /** @param {import(".").NS } ns */
 export function getAttackStatus(servers, targets, ns) {
-    for (const servername in servers) {
-        let server = servers[servername];
-        server.w = 0;
-        server.h = 0;
-        server.g = 0;
-        servers[servername] = server;
-    } // End loop over servers
-    for (let target of targets) {
-        target.running.weaken = 0;
-        target.running.hack = 0;
-        target.running.grow = 0;
-    } // End loop over targets
-
     // Then reset by querying all the servers
     for (const servername in servers) {
         let server = servers[servername];
         // Pull fresh server info
-        server = { ...server, ...new Server(server.name, ns) };
+        server.update(ns);
         // Query the server to see what attack threads it is running.
         let procs = ns.ps(server.name);
         while (procs.length > 0) {
@@ -349,13 +336,7 @@ export function rootServers(servers, ns) {
         // Try to root any servers we haven't gotten yet.
         if (!info.rooted) {
             const success = root(server, ns);
-            if (success) {
-                // merge existing data so we don't lose thread counts
-                servers[server] = {
-                    ...info,
-                    ...new Server(server, ns),
-                };
-            }
+            if (success) servers[server].update(ns);
         }
     }
     return servers;

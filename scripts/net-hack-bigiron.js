@@ -1,4 +1,4 @@
-import { getServerInfo, getPlayerInfo, getAllServerInfo } from './bitlib';
+import { Server, getPlayerInfo, getAllServerInfo } from './bitlib';
 import { findTargets, getAttackStatus } from './net-hack';
 
 /** @param {import(".").NS} ns */

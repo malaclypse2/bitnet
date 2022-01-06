@@ -99,7 +99,7 @@ export class Server {
     constructor(servername, ns) {
         this.name = servername;
         this.ram = ns.getServerMaxRam(servername);
-        this.freeRam = ram - ns.getServerUsedRam(servername);
+        this.freeRam = this.ram - ns.getServerUsedRam(servername);
         this.rooted = ns.hasRootAccess(servername);
         this.slots = 0;
         if (this.rooted) {
@@ -120,6 +120,25 @@ export class Server {
         this.w = 0;
         this.g = 0;
         this.h = 0;
+    }
+    update(ns) {
+        let servername = this.name;
+        this.ram = ns.getServerMaxRam(servername);
+        this.freeRam = this.ram - ns.getServerUsedRam(servername);
+        this.rooted = ns.hasRootAccess(servername);
+        this.slots = 0;
+        if (this.rooted) {
+            this.slots = Math.floor(this.freeRam / worker_size);
+        }
+        this.maxMoney = ns.getServerMaxMoney(servername);
+        this.currentMoney = ns.getServerMoneyAvailable(servername);
+        this.hackFactor = ns.hackAnalyze(servername);
+        this.hackTime = ns.getHackTime(servername);
+        this.growTime = ns.getGrowTime(servername);
+        this.weakenTime = ns.getWeakenTime(servername);
+        this.securityBase = ns.getServerMinSecurityLevel(servername);
+        this.securityCurrent = ns.getServerSecurityLevel(servername);
+        this.levelRequired = ns.getServerRequiredHackingLevel(servername);
     }
 }
 
@@ -143,12 +162,13 @@ export function getServerNames(ns) {
 
 /** @param {import(".").NS } ns */
 export function getAllServerInfo(servers, ns) {
-    servers['home'] = { ...servers['home'], ...new Server('home', ns) };
+    if (servers['home']) servers['home'].update(ns);
+    else servers['home'] = new Server('home', ns);
 
     let foundServers = getServerNames(ns);
-    for (const server of foundServers) {
-        let info = new Server(server, ns);
-        servers[server] = { ...servers[server], ...info };
+    for (const servername of foundServers) {
+        if (servers[servername]) servers[servername].update(ns);
+        else servers[servername] = new Server(servername, ns);
     }
     return servers;
 }

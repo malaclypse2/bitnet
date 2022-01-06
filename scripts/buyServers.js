@@ -1,4 +1,4 @@
-import { getServerInfo, pad, print2Up, print1Up } from "scripts/bitlib.js";
+import { Server, pad, print2Up, print1Up } from "scripts/bitlib.js";
 
 /** @param {import(".").NS} ns */
 export async function main(ns) {
