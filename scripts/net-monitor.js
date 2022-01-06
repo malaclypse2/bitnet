@@ -60,6 +60,7 @@ async function runStart(displayTarget, displayType, ns) {
 	let servers = {}
 	let targets = []
 	let playerInfo = {}
+	let processesToMonitor = []
 
 	ns.tail()
 
@@ -70,15 +71,32 @@ async function runStart(displayTarget, displayType, ns) {
 			playerInfo = getPlayerInfo(ns)
 			servers = getAllServerInfo(servers, ns)
 			targets = findTargets(servers, playerInfo, ns)
+			processesToMonitor = findInterestingProcesses(ns)
 		}
 		if (on10 == 1) {
 			getAttackStatus(servers, targets, ns)
-			targets = targets.filter( target => { target.runningHack} )
 		}
 
-		printFancyLog(servers, targets, displayTarget, displayType, ns)
+		printFancyLog(servers, targets, processesToMonitor, displayType, ns)
 		await ns.asleep(100)
 	}	
+}
+
+function findInterestingProcesses(ns) {
+	let interestingProcs = []
+	// Start by looking at the script's host
+	let hostname = ns.getHostname()
+	let procs = ns.ps(hostname)
+	for (const procInfo of procs) {
+		if (procInfo.filename.includes('net-')) {
+			let proc = ns.getRunningScript(procInfo.filename, hostname, ...procInfo.args)
+			if (proc && proc.onlineMoneyMade > 0) {
+				procInfo.hostname = hostname
+				interestingProcs.push(procInfo)
+			}
+		}
+	}
+	return interestingProcs;
 }
 
 /** @param {import(".").NS } ns */
@@ -87,13 +105,15 @@ function runStop(ns) {
 }
 
 /** @param {import(".").NS } ns */
-export function printFancyLog(servers, targets, displayTarget, logType, ns) {
+export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) {
 	ns.clearLog(...ns.args)
 
+	// get information about the current pool of workers, and reformat everything as pretty strings.
 	let pool = getPoolFromServers(servers, ns)
 	for (const key in pool) {
 		pool[key] = ns.nFormat(pool[key], "0a");
 	}
+
 	// One column
 	if (logType === "Targets1Up") {
 		for (const target of targets) {
@@ -125,15 +145,24 @@ export function printFancyLog(servers, targets, displayTarget, logType, ns) {
 			}
 		}
 	} else if (logType === "Short") {
-		let script = ns.getRunningScript(ns.getScriptName(), ns.getHostname(), ...ns.args);
-		ns.print('Runtime: ' + ns.tFormat(script.onlineRunningTime * 1000))
-		let cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, "$0a")
-		ns.print(`Income: ${ns.nFormat(script.onlineMoneyMade, "$0a")} (${cps}/sec)`)
-		ns.print('')
+		for (const controller of controlScriptInfo) {
+			let script = ns.getRunningScript(controller.filename, controller.hostname, ...controller.args);	
+			if (script) {
+				let runTime = ns.tFormat(script.onlineRunningTime * 1000)
+				let basename = script.filename.split('/').pop()
+				let cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, "$0a")
+				
+				ns.print(`${basename}@${controller.hostname} args=[${script.args}] `)
+				ns.print(`Runtime: ${runTime}`)
+				ns.print(`Income: ${ns.nFormat(script.onlineMoneyMade, "$0a")} (${cps}/sec)`)
+			}
+			ns.print('')
+		}
+		
 		ns.print(`Currently attacking ${targets.length} servers.`)
 	}
 
-	ns.print('Worker Status')
+	ns.print('Swarm Worker Status')
 	ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
 	ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
 }

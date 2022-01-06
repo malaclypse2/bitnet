@@ -1,4 +1,4 @@
-import { getPlayerInfo, getAllServerInfo, getServerInfo, root, printfSeverAsTarget, worker_size, stopscript } from "scripts/bitlib.js";
+import { getPlayerInfo, getAllServerInfo, getServerInfo, root } from "scripts/bitlib.js";
 
 let hackThreshold = 0.50 	// Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.20 	// Try to hack this percentage of money at a time
@@ -303,17 +303,17 @@ export function getAttackStatus(servers, targets, ns) {
 		let procs = ns.ps(server.name) 
 		while(procs.length > 0) {
 			const proc = procs.pop()
-			if (proc.filename.includes('weaken')) {
+			if (proc.filename.includes('weakenOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningWeakenThreads += proc.threads;
 				server.w += proc.threads
 			}
-			if (proc.filename.includes('grow')) {
+			if (proc.filename.includes('growOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningGrowThreads += proc.threads;
 				server.g += proc.threads
 			}
-			if (proc.filename.includes('hack')) {
+			if (proc.filename.includes('hackOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
 				if (target) target.runningHackThreads += proc.threads;
 				server.h += proc.threads

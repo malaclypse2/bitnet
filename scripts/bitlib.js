@@ -90,7 +90,9 @@ export function getServerInfo(server, ns) {
 	let freeRam = ram - ns.getServerUsedRam(server)
 	let rooted = ns.hasRootAccess(server)
 	let slots = 0
-	if (rooted) {
+	// Exclude unrooted and very large servers from the worker pool. 
+	// Unrooted servers can't run programs, and very large server deserve their own codebase
+	if (rooted && (ram < 1024)) {
 		slots = Math.floor(freeRam / worker_size)
 	}
 	return {
