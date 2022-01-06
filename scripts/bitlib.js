@@ -9,8 +9,8 @@ export async function main(ns) {
     let playerInfo = getPlayerInfo(ns);
     ns.tprint(JSON.stringify(playerInfo));
 
-    ns.tprint("getServerInfo('n00dles')");
-    ns.tprint(JSON.stringify(getServerInfo('n00dles', ns)));
+    ns.tprint("new Server('n00dles')");
+    ns.tprint(JSON.stringify(new Server('n00dles', ns)));
 
     ns.tprint('getAllServerInfo:');
     let servers = getAllServerInfo({}, ns);
@@ -95,59 +95,32 @@ export function printfServer(server, ns) {
 }
 
 /** @param {import(".").NS } ns */
-export function Server(servername, ns) {
-    this.name = servername;
-    this.ram = ns.getServerMaxRam(servername);
-    this.freeRam = ram - ns.getServerUsedRam(servername);
-    this.rooted = ns.hasRootAccess(servername);
-    this.slots = 0;
-    if (this.rooted) {
-        this.slots = Math.floor(this.freeRam / worker_size);
+export class Server {
+    constructor(servername, ns) {
+        this.name = servername;
+        this.ram = ns.getServerMaxRam(servername);
+        this.freeRam = ram - ns.getServerUsedRam(servername);
+        this.rooted = ns.hasRootAccess(servername);
+        this.slots = 0;
+        if (this.rooted) {
+            this.slots = Math.floor(this.freeRam / worker_size);
+        }
+        this.maxMoney = ns.getServerMaxMoney(servername);
+        this.currentMoney = ns.getServerMoneyAvailable(servername);
+        this.hackFactor = ns.hackAnalyze(servername);
+        this.hackTime = ns.getHackTime(servername);
+        this.growTime = ns.getGrowTime(servername);
+        this.weakenTime = ns.getWeakenTime(servername);
+        this.securityBase = ns.getServerMinSecurityLevel(servername);
+        this.securityCurrent = ns.getServerSecurityLevel(servername);
+        this.levelRequired = ns.getServerRequiredHackingLevel(servername);
+        this.desired = { hack: 0, grow: 0, weaken: 0 };
+        this.running = { hack: 0, grow: 0, weaken: 0 };
+        this.score = 0;
+        this.w = 0;
+        this.g = 0;
+        this.h = 0;
     }
-    this.maxMoney = ns.getServerMaxMoney(servername);
-    this.currentMoney = ns.getServerMoneyAvailable(servername);
-    this.hackFactor = ns.hackAnalyze(servername);
-    this.hackTime = ns.getHackTime(servername);
-    this.growTime = ns.getGrowTime(servername);
-    this.weakenTime = ns.getWeakenTime(servername);
-    this.securityBase = ns.getServerMinSecurityLevel(servername);
-    this.securityCurrent = ns.getServerSecurityLevel(servername);
-    this.levelRequired = ns.getServerRequiredHackingLevel(servername);
-    this.desired = { hack: 0, grow: 0, weaken: 0 };
-    this.running = { hack: 0, grow: 0, weaken: 0 };
-    this.score = 0;
-    this.w = 0;
-    this.g = 0;
-    this.h = 0;
-}
-
-/** @param {import(".").NS } ns */
-export function getServerInfo(server, ns) {
-    let ram = ns.getServerMaxRam(server);
-    let freeRam = ram - ns.getServerUsedRam(server);
-    let rooted = ns.hasRootAccess(server);
-    let slots = 0;
-    // We can only run scripts on rooted servers.
-    if (rooted) {
-        slots = Math.floor(freeRam / worker_size);
-    }
-    return {
-        name: server,
-        ram: ram,
-        slots: slots,
-        rooted: rooted,
-        maxMoney: ns.getServerMaxMoney(server),
-        currentMoney: ns.getServerMoneyAvailable(server),
-        hackFactor: ns.hackAnalyze(server), // Percentage of cash stolen per thread
-        hackTime: ns.getHackTime(server), // ms per hack() call
-        growTime: ns.getGrowTime(server),
-        weakenTime: ns.getWeakenTime(server),
-        securityBase: ns.getServerMinSecurityLevel(server),
-        securityCurrent: ns.getServerSecurityLevel(server),
-        levelRequired: ns.getServerRequiredHackingLevel(server),
-        desired: { hack: 0, grow: 0, weaken: 0 },
-        running: { hack: 0, grow: 0, weaken: 0 },
-    };
 }
 
 function scan(ns, parent, server, list) {
@@ -170,11 +143,11 @@ export function getServerNames(ns) {
 
 /** @param {import(".").NS } ns */
 export function getAllServerInfo(servers, ns) {
-    servers['home'] = { ...servers['home'], ...getServerInfo('home', ns) };
+    servers['home'] = { ...servers['home'], ...new Server('home', ns) };
 
     let foundServers = getServerNames(ns);
     for (const server of foundServers) {
-        let info = getServerInfo(server, ns);
+        let info = new Server(server, ns);
         servers[server] = { ...servers[server], ...info };
     }
     return servers;

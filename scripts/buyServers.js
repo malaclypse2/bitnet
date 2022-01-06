@@ -44,7 +44,7 @@ export async function main(ns) {
 	let i = 1
 	let lines = []
 	for (const servername of servers) {
-		let server = getServerInfo(servername, ns);
+		let server = new Server(servername, ns);
 		let serverStr = pad('        ', servername, true)
 		let ram = ns.nFormat(server.ram * Math.pow(2, 30), "0 b")
 		ram =  pad('      ', ram)

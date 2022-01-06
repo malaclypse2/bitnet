@@ -92,7 +92,7 @@ async function runStart(ns) {
     await ns.asleep(100);
 
     // Everyone loves a noodle shop. Let's start there.
-    let firstTarget = getServerInfo('n00dles', ns);
+    let firstTarget = new Server('n00dles', ns);
     firstTarget = evaluateTarget(firstTarget, playerInfo, ns);
     targets.unshift(firstTarget);
 
@@ -120,7 +120,7 @@ async function runStart(ns) {
         for (let i = 0; i < targets.length; i++) {
             let target = targets[i];
             // Update server information
-            target = { ...target, ...getServerInfo(target.name, ns) };
+            target = { ...target, ...new Server(target.name, ns) };
             // Re-evaluate targetting criteria, including desired attack threads
             target = await evaluateTarget(target, playerInfo, ns);
             targets[i] = target;
@@ -317,7 +317,7 @@ export function getAttackStatus(servers, targets, ns) {
     for (const servername in servers) {
         let server = servers[servername];
         // Pull fresh server info
-        server = { ...server, ...getServerInfo(server.name, ns) };
+        server = { ...server, ...new Server(server.name, ns) };
         // Query the server to see what attack threads it is running.
         let procs = ns.ps(server.name);
         while (procs.length > 0) {
@@ -353,7 +353,7 @@ export function rootServers(servers, ns) {
                 // merge existing data so we don't lose thread counts
                 servers[server] = {
                     ...info,
-                    ...getServerInfo(server, ns),
+                    ...new Server(server, ns),
                 };
             }
         }
