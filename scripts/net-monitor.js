@@ -1,7 +1,7 @@
 import { getPlayerInfo, getAllServerInfo, getServerInfo, printfSeverAsTarget } from "scripts/bitlib.js";
 import { findTargets, getAttackStatus, getPoolFromServers } from "scripts/net-hack.js";
 
-const displayTypes = ["Short", "Targets1Up", "Targets2Up"]
+const displayTypes = ["Short", "Targets1Up", "Targets2Up", "Servers2Up", "Servers3Up"]
 const displayTargets = ["net-hack"]
 
 // Let's try to replicate all of the fancy monitoring and logging from net-hack.js here.
@@ -76,6 +76,9 @@ async function runStart(displayTarget, displayType, ns) {
 		if (on10 == 1) {
 			getAttackStatus(servers, targets, ns)
 		}
+		if (on100 == 1) {
+			targets = targets.filter(target => (target.runningWeakenThreads || 0) > 0)
+		}
 
 		printFancyLog(servers, targets, processesToMonitor, displayType, ns)
 		await ns.asleep(100)
@@ -113,38 +116,35 @@ export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) 
 	for (const key in pool) {
 		pool[key] = ns.nFormat(pool[key], "0a");
 	}
+	let displayData = []
 
-	// One column
-	if (logType === "Targets1Up") {
+	if (logType.includes("Targets")) {
 		for (const target of targets) {
-			const lines = printfSeverAsTarget(target, ns)
-			for (const line of lines) {
-				ns.print(line)
-			}
+			let lines = printfSeverAsTarget(target, ns)
+			displayData.push(lines)
 		}
 	}
-	else if (logType == "Targets2Up") {
-		// Two-Column. Assumes everything is pretty uniform.
-		let displayData = []
-		for (const target of targets) {
-			const lines = printfSeverAsTarget(target, ns)
-			displayData.unshift(lines)
+
+	if (logType.includes("Servers")) {
+		for (const servername in servers) {
+			let server = servers[servername]
+			let lines = printfServer(server, ns)
+			displayData.push(lines)
 		}
-		while (displayData.length > 1) {
-			let col1Lines = displayData.pop()
-			let col2Lines = displayData.pop()
-			for (let i = 0; i < col1Lines.length; i++) {
-				let col1 = col1Lines[i];
-				let col2 = col2Lines[i];
-				ns.print(col1 + '     ' + col2)
-			}
-		} // Then print any leftovers
-		for (const data of displayData) {
-			for (const line of data) {
-				ns.print(line)
-			}
-		}
-	} else if (logType === "Short") {
+	}
+
+	// Printing.  Kind of hacky use of the logtype. Should probably fix it.
+	if (logType.endsWith("3Up")) {
+		print3Up(displayData, ns);
+	}
+	if (logType.endsWith("2Up")) {
+		print2Up(displayData, ns);
+	}
+	if (logType.endsWith("1Up")) {
+		print1Up(displayData, ns);
+	}
+	 
+	if (logType === "Short") {
 		for (const controller of controlScriptInfo) {
 			let script = ns.getRunningScript(controller.filename, controller.hostname, ...controller.args);	
 			if (script) {
@@ -159,10 +159,54 @@ export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) 
 			ns.print('')
 		}
 		
-		ns.print(`Currently attacking ${targets.length} servers.`)
+		ns.print(`Currently attacking ${targets.length} targets.`)
 	}
 
 	ns.print('Swarm Worker Status')
 	ns.print(`Free: ${pool.free}, Running: ${pool.running}`)
 	ns.print(`Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`)
 }
+
+function print3Up(displayData, ns) {
+	// Two-Column. Assumes everything is pretty uniform. And pretty narrow.
+	let n = 3
+	while (displayData.length >= n) {
+		let columns = Array(n).map( x => displayData.pop() )
+		for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
+			let line = ''
+			for (let colNum = 0; colNum < columns.length; colNum++) {
+				if (colNum > 0) line += '  '
+				line += columns[colNum]
+			}
+			ns.print(line);
+		}
+	}
+	if (displayData.length > 0 ){
+		print2Up(displayData, ns)
+	}
+}
+
+function print2Up(displayData, ns) {
+// Two-Column. Assumes everything is pretty uniform.
+	while (displayData.length >= 2) {
+		let col1Lines = displayData.pop();
+		let col2Lines = displayData.pop();
+		for (let i = 0; i < col1Lines.length; i++) {
+			let col1 = col1Lines[i];
+			let col2 = col2Lines[i];
+			ns.print(col1 + '   ' + col2);
+		}
+	}
+	if (displayData.length > 0)  {
+		print1Up(displayData, ns)
+	}
+}
+
+function print1Up(displayData, ns) {
+	for (const data of displayData) {
+		for (const line of data) {
+			ns.print(line);
+		}
+	}
+}
+

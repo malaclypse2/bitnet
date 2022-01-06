@@ -1,4 +1,5 @@
-export const worker_size = 2.0 	// in GB
+const worker_size = 2.0 	// in GB
+const big_iron_size = 2048 	// in GB. Any servers larger than this will get their own codebase.
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
@@ -84,6 +85,17 @@ export function printfSeverAsTarget(server, ns){
 	return [line1, line2, line3]
 }
 
+export function printfServer(server, ns) {
+	// Maybe try a narrower but higher format this time, just for visual distinction.
+
+	let lines = new Array(5);
+	
+	lines[0] = `╭─┤`;
+	lines[0] += pad(Array(17).join('─'), server.name + '├')
+
+	return lines
+}
+
 /** @param {import(".").NS } ns */
 export function getServerInfo(server, ns) {
 	let ram = ns.getServerMaxRam(server)
@@ -92,7 +104,7 @@ export function getServerInfo(server, ns) {
 	let slots = 0
 	// Exclude unrooted and very large servers from the worker pool. 
 	// Unrooted servers can't run programs, and very large server deserve their own codebase
-	if (rooted && (ram < 1024)) {
+	if (rooted && (ram < 2048)) {
 		slots = Math.floor(freeRam / worker_size)
 	}
 	return {
