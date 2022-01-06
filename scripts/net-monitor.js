@@ -77,7 +77,7 @@ async function runStart(displayTarget, displayType, ns) {
 			getAttackStatus(servers, targets, ns)
 		}
 		if (on100 == 1) {
-			targets = targets.filter(target => (target.runningWeakenThreads || 0) > 0)
+			targets = targets.filter(target => target.running.weaken > 0)
 		}
 
 		printFancyLog(servers, targets, processesToMonitor, displayType, ns)

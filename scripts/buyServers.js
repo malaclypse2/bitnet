@@ -6,7 +6,7 @@ export async function main(ns) {
 	ns.tail()
 	let servers = ns.getPurchasedServers()
 	var moneyAvailable = ns.getServerMoneyAvailable('home');
-	var maxRam = await ns.getPurchasedServerMaxRam();
+	var maxRam = ns.getPurchasedServerMaxRam();
 
 	// Do something with arguments
 	let args = ns.flags([

@@ -189,11 +189,16 @@ async function allocateThreads(servers, targets, ns) {
 		freeSlots += servers[server].slots || 0
 	}
 
-	let totalDesiredHackThreads = targets.reduce((sum, target) => sum + (target.desiredHackThreads || 0), 0) - targets.reduce((sum, target) => sum + (target.runningHackThreads || 0), 0)
+	let totalDesiredHackThreads = targets.reduce((sum, target) => sum + target.desired.hack, 0) 
+	totalDesiredHackThreads -= targets.reduce((sum, target) => sum + target.running.hack, 0)
 	totalDesiredHackThreads = Math.max(totalDesiredHackThreads, 0)
-	let totalDesiredGrowThreads = targets.reduce((sum, target) => sum + (target.desiredGrowThreads || 0), 0) - targets.reduce((sum, target) => sum + (target.runningGrowThreads || 0), 0)
+
+	let totalDesiredGrowThreads = targets.reduce((sum, target) => sum + target.desired.grow, 0) 
+	totalDesiredGrowThreads -= targets.reduce((sum, target) => sum + target.running.grow, 0)
 	totalDesiredGrowThreads = Math.max(totalDesiredGrowThreads, 0)
-	let totalDesiredWeakenThreads = targets.reduce((sum, target) => sum + (target.desiredWeakenThreads || 0), 0) - targets.reduce((sum, target) => sum + (target.runningWeakenThreads || 0), 0)
+
+	let totalDesiredWeakenThreads = targets.reduce((sum, target) => sum + target.desired.weaken, 0) 
+	totalDesiredGrowThreads -= targets.reduce((sum, target) => sum + target.running.weaken, 0)
 	totalDesiredWeakenThreads = Math.max(totalDesiredWeakenThreads, 0)
 	
 	ns.print(`Want to assign ${totalDesiredHackThreads} hack threads, ${totalDesiredWeakenThreads} weaken threads, and ${totalDesiredGrowThreads} grow threads in ${freeSlots} free slots.`)
@@ -225,8 +230,8 @@ async function allocateThreads(servers, targets, ns) {
 	let totalAllocated = allocated.hack + allocated.grow + allocated.weaken
 	let attackScripts = { hack: script_hack, grow: script_grow, weaken: script_weaken }
 	for (const target of targets) {
-		target.desired = { hack: target.desiredHackThreads, grow: target.desiredGrowThreads, weaken: target.desiredWeakenThreads }
-		target.running = { hack: target.runningHackThreads, grow: target.runningGrowThreads, weaken: target.runningWeakenThreads }
+		target.desired = { hack: target.desired.hack, grow: target.desired.grow, weaken: target.desired.weaken }
+		target.running = { hack: target.running.hack, grow: target.running.grow, weaken: target.running.weaken }
 	}
 	// Exec all the attack threads on servers
 	for (const servername in servers) {
@@ -255,15 +260,15 @@ async function allocateThreads(servers, targets, ns) {
 						switch (attackType) {
 							case 'hack':
 								server.h = (server.h || 0) + desired
-								target.runningHackThreads = (target.runningHackThreads||0) + desired
+								target.running.hack = (target.running.hack||0) + desired
 								break;
 							case 'grow':
 								server.g = (server.g||0) + desired
-								target.runningGrowThreads = (target.runningGrowThreads||0) + desired
+								target.running.grow = (target.running.grow||0) + desired
 								break;
 							case 'weaken':
 								server.w = (server.w||0) + desired
-								target.runningWeakenThreads = (target.runningWeakenThreads||0) + desired
+								target.running.weaken = (target.running.weaken||0) + desired
 								break;
 							default:
 								break;
@@ -288,9 +293,9 @@ export function getAttackStatus(servers, targets, ns) {
 		servers[servername] = server;
 	} // End loop over servers
 	for (let target of targets) {
-		target.runningWeakenThreads = 0;
-		target.runningHackThreads = 0;
-		target.runningGrowThreads = 0;
+		target.running.weaken = 0;
+		target.running.hack = 0;
+		target.running.grow = 0;
 	} // End loop over targets
 
 
@@ -305,17 +310,17 @@ export function getAttackStatus(servers, targets, ns) {
 			const proc = procs.pop()
 			if (proc.filename.includes('weakenOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
-				if (target) target.runningWeakenThreads += proc.threads;
+				if (target) target.running.weaken += proc.threads;
 				server.w += proc.threads
 			}
 			if (proc.filename.includes('growOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
-				if (target) target.runningGrowThreads += proc.threads;
+				if (target) target.running.grow += proc.threads;
 				server.g += proc.threads
 			}
 			if (proc.filename.includes('hackOnce.js')) {
 				let target = targets.find(target => target.name == proc.args[0])
-				if (target) target.runningHackThreads += proc.threads;
+				if (target) target.running.hack += proc.threads;
 				server.h += proc.threads
 			}
 		}
@@ -386,38 +391,38 @@ export function evaluateTarget(server, playerInfo, ns) {
 
 		if (server.currentMoney / server.maxMoney > hackThreshold) {
 			let desiredHackFactor = hackFactor // percentage to steal per hacking cycle
-			server.desiredHackThreads = Math.ceil(desiredHackFactor / server.hackFactor)
-			server.desiredHackThreads = Math.max(server.desiredHackThreads, 0)
+			server.desired.hack = Math.ceil(desiredHackFactor / server.hackFactor)
+			server.desired.hack = Math.max(server.desired.hack, 0)
 		} else {
-			server.desiredHackThreads = 0;
+			server.desired.hack = 0;
 		}
 
 		// How much money is going to be stolen before we grow (on average)?
 		let hacksPerGrow = server.growTime / server.hackTime
-		let loss = hacksPerGrow * server.desiredHackThreads * server.hackFactor * server.currentMoney
+		let loss = hacksPerGrow * server.desired.hack * server.hackFactor * server.currentMoney
 		// How many growth threads would we like to have?
 		let desiredGrowthFactor = server.maxMoney / (server.currentMoney - loss);
 		if (desiredGrowthFactor >= 1 && desiredGrowthFactor < Infinity) {
-			server.desiredGrowThreads = Math.ceil(ns.growthAnalyze(server.name, desiredGrowthFactor));
-			server.desiredGrowThreads = Math.max(server.desiredGrowThreads, 0)
+			server.desired.grow = Math.ceil(ns.growthAnalyze(server.name, desiredGrowthFactor));
+			server.desired.grow = Math.max(server.desired.grow, 0)
 		} else {
-			server.desiredGrowThreads = 1;
+			server.desired.grow = 1;
 		}
 		// Do we need to let the security drop some?
 		if ((server.securityCurrent - server.securityBase) > 5) {
-			server.desiredGrowThreads = 1;
+			server.desired.grow = 1;
 		}
 
 		// How much will security increase before we weaken?
 		let hacksPerWeaken = server.weakenTime / server.hackTime;
 		let growsPerWeaken = server.weakenTime / server.growTime;
-		let secIncreaseFromHacks = hacksPerWeaken * ns.hackAnalyzeSecurity(server.desiredHackThreads);
-		let secIncreaseFromGrowth = growsPerWeaken * ns.growthAnalyzeSecurity(server.desiredGrowThreads);
+		let secIncreaseFromHacks = hacksPerWeaken * ns.hackAnalyzeSecurity(server.desired.hack);
+		let secIncreaseFromGrowth = growsPerWeaken * ns.growthAnalyzeSecurity(server.desired.grow);
 		let secIncreaseFromThreads = secIncreaseFromGrowth + secIncreaseFromHacks;
 		let totalSecToWeaken = server.securityCurrent - server.securityBase + secIncreaseFromThreads;
 
-		server.desiredWeakenThreads = Math.ceil(totalSecToWeaken / 0.05); // Static 0.05 security per thread used.
-		server.desiredWeakenThreads = Math.max(server.desiredWeakenThreads, 0)
+		server.desired.weaken = Math.ceil(totalSecToWeaken / 0.05); // Static 0.05 security per thread used.
+		server.desired.weaken = Math.max(server.desired.weaken, 0)
 
 	} else {
 		server.score = 0;
