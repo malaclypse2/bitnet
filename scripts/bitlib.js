@@ -61,12 +61,12 @@ export function printfSeverAsTarget(server, ns) {
     const secIncr = pad('    ', ns.nFormat(server.securityCurrent - server.securityBase, '0.0'));
     const secStr = `Sec ${secBase} +${secIncr}`;
 
-    const hacksRunning = ns.nFormat(server.runningHackThreads || 0, '0');
-    const hacksWanted = ns.nFormat(server.desiredHackThreads || 0, '0');
-    const growsRunning = ns.nFormat(server.runningGrowThreads || 0, '0');
-    const growsWanted = ns.nFormat(server.desiredGrowThreads || 0, '0');
-    const weakensRunning = ns.nFormat(server.runningWeakenThreads || 0, '0');
-    const weakensWanted = ns.nFormat(server.desiredWeakenThreads || 0, '0');
+    const hacksRunning = ns.nFormat(server.running.hack, '0');
+    const hacksWanted = ns.nFormat(server.desired.hack, '0');
+    const growsRunning = ns.nFormat(server.running.grow, '0');
+    const growsWanted = ns.nFormat(server.desired.grow, '0');
+    const weakensRunning = ns.nFormat(server.running.grow, '0');
+    const weakensWanted = ns.nFormat(server.desired.weaken, '0');
 
     const hackStr = pad(Array(16).join('─'), `Hack ${hacksRunning}/${hacksWanted}├`);
     const growStr = pad(Array(17).join('─'), `┤Grow ${growsRunning}/${growsWanted}├`);

@@ -185,7 +185,7 @@ async function allocateThreads(servers, targets, ns) {
 
     // Make sure our notion of running attack threads against each target matches reality.
     // First, reset all our assumptions
-    getAttackStatus(servers, targets, ns); // End loop over servers
+    getAttackStatus(servers, targets, ns); 
 
     let freeSlots = 0;
     for (const server in servers) {
@@ -232,7 +232,7 @@ async function allocateThreads(servers, targets, ns) {
         allocatedGrowThreads = totalDesiredGrowThreads;
         allocatedWeakenThreads = totalDesiredWeakenThreads;
     }
-    //ns.tprint(`Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`)
+    ns.print(`Dividing free slots as ${allocatedHackThreads} hack threads, ${allocatedWeakenThreads} weaken threads, and ${allocatedGrowThreads} grow threads.`)
 
     // Put things into variables they'll be easier to get later
     let allocated = { hack: allocatedHackThreads, grow: allocatedGrowThreads, weaken: allocatedWeakenThreads };
@@ -271,19 +271,16 @@ async function allocateThreads(servers, targets, ns) {
                     if (retval > 0) {
                         allocated[attackType] -= desired;
                         server.slots -= desired;
-                        target.running[attackType] = target.running[attackType] + desired;
+                        target.running[attackType] += desired;
                         switch (attackType) {
                             case 'hack':
                                 server.h += desired;
-                                target.running.hack += desired;
                                 break;
                             case 'grow':
                                 server.g += desired;
-                                target.running.grow += desired;
                                 break;
                             case 'weaken':
                                 server.w += desired;
-                                target.running.weaken += desired;
                                 break;
                             default:
                                 break;
