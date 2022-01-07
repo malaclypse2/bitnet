@@ -6,7 +6,7 @@ let max_targets = 100;
 let sleep_time = 1000;
 let banned_targets = ['b-and-a'];
 const big_iron_size = 2048;   // in GB. Any servers larger than this will get their own codebase.
-const big_iron_level = 1000;  // Start applying big iron logic once we hit this level.
+const big_iron_level = 5000;  // Start applying big iron logic once we hit this level.
 
 const script_grow = '/scripts/util/growOnce.js';
 const script_weaken = '/scripts/util/weakenOnce.js';
