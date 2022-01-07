@@ -8,7 +8,25 @@
  *
  * The idea is to run, do our thing, then exit.
  * Don't stay resident longer than needed.
- * Don't use more ram than needed.
+ * Try not to use more ram than needed.
+ * 
+ * Examples I'd like to handle:
+ * 
+ * (Done)
+ * net start 
+ * net stop
+ * net status
+ *
+ * (TODO)
+ * net hack add target
+ * net hack drop target
+ * net monitor short
+ * net monitor Targets2Up
+ * net buy server
+ * net buy hacknet
+ * net upgrade servers
+ * net backdoor
+ * 
  */
 
 export class SubSystem {
@@ -52,7 +70,9 @@ export const subsystems = [
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home'),
 ];
 
-/** @param {import(".").NS } ns */
+/**
+ * @param {import(".").NS } ns 
+*/
 export async function main(ns) {
     // arg parsing
     let args = ns.flags([['help', false]]);
@@ -68,9 +88,6 @@ export async function main(ns) {
         net start
         net stop
         net restart
-		net hack start
-		net hack stop
-		net mon 
 		`;
         ns.tprint(msg);
     }
