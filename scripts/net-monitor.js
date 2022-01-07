@@ -2,8 +2,8 @@ import { findTargets, getAttackStatus, getPoolFromServers } from 'scripts/net-ha
 import {
     getPlayerInfo,
     getAllServerInfo,
-    Server,
     printfSeverAsTarget,
+    printfServer,
     print1Up,
     print2Up,
     print3Up,

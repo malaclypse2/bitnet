@@ -97,12 +97,16 @@ export function printfSeverAsTarget(server, ns) {
 
 export function printfServer(server, ns) {
     // Maybe try a narrower but higher format this time, just for visual distinction.
-
+    // length 24?
     let lines = new Array(5);
 
-    lines[0] = `╭─┤`;
-    lines[0] += pad(Array(17).join('─'), server.name + '├');
-
+    let servername = pad(Array(20).join('─'), `┤${server.name}├`);
+    lines[0] = `╭─${servername       }─╮`;
+    lines[1] = `| 000 Gb               │`;
+    lines[2] = `|                      │`;
+    lines[3] = `|                      │`;
+    lines[4] = `╰                     ╯`;
+    ns.nFormat('');
     return lines;
 }
 

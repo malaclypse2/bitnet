@@ -145,12 +145,12 @@ async function runStart(ns) {
 
         // Occasionally consider adding a new target
         if (on30 == 1) {
-            // If we have a bunch of free threads, go ahead and add new targets. 
+            // If we have a bunch of free threads, go ahead and add new targets.
             // One target per thousand free threads
             let additionalTargets = Math.floor(pool.free / 1000) + 1;
             additionalTargets = Math.min(additionalTargets, max_targets - targets.length);
             // Only if we have more free threads than we use, on average.
-            let enoughFree = (pool.free > (pool.running / targets.length));
+            let enoughFree = pool.free > pool.running / targets.length;
 
             if (enoughFree && additionalTargets) {
                 addTargets(playerInfo, additionalTargets, ns);
@@ -218,7 +218,6 @@ function allocateSwarmThreads(servers, targets, player, ns) {
     for (const servername in servers) {
         let server = servers[servername];
         let isBigIron = player.level >= big_iron_level && server.ram >= big_iron_size;
-        let o = server.slots;
         if (isBigIron) {
             server.slots = 0;
         }
@@ -495,11 +494,11 @@ function checkC2Ports(ns) {
     // hackThreshold, hackFactor, max_targets, logType
     let commands = [];
     let cmd = ns.readPort(2);
-    while (cmd != 'NULL PORT DATA') {
+    while (cmd !== 'NULL PORT DATA') {
         commands.push(cmd);
         cmd = ns.readPort(2);
     }
-    while (commands) {
+    while (commands.length > 0) {
         // expects {owner:'net-hack', action: 'set', key:'some-key', value:'some-value'}
         // ...at least for now.
         cmd = commands.pop();
@@ -511,8 +510,40 @@ function checkC2Ports(ns) {
             ns.writePort(cmd);
             continue;
         }
-        if (cmd.key == 'hackThreshold' && cmd.action == 'set') hackThreshold = cmd.value;
-        if (cmd.key == 'hackFactor' && cmd.action == 'set') hackFactor = cmd.value;
-        if (cmd.key == 'max_targets' && cmd.action == 'set') max_targets = cmd.value;
+        if (cmd.action === 'set') {
+            switch (cmd.key) {
+                case 'hackThreshold':
+                    hackThreshold = cmd.value;
+                    break;
+                case 'hackFactor':
+                    hackFactor = cmd.value;
+                    break;
+                case 'max_targets':
+                    max_targets = cmd.value;
+                    break;
+
+                default:
+                    break;
+            }
+        } // End set
+        if (cmd.action === 'run') {
+            switch (cmd.key) {
+                case 'stop':
+                    runStop(ns);
+                    break;
+
+                default:
+                    break;
+            }
+        } // End run
+        if (cmd.action === 'get') {
+            switch(cmd.key) {
+                case 'targets':
+                    // push targets[] back onto the port?
+                    break;
+            default:
+                break;
+            }
+        }
     }
 }

@@ -15,7 +15,6 @@ export async function main(ns) {
     let hostname = ns.getHostname();
     let scriptname = ns.getScriptName();
     let playerInfo = getPlayerInfo(ns);
-
     let servers = getAllServerInfo({}, ns);
     let host = servers[hostname];
     let targets = findTargets(servers, playerInfo, ns);
@@ -30,13 +29,15 @@ export async function main(ns) {
         return;
     }
     // Make sure the target is prepped, and that there are no inbound attacks.
-    let wait = await prepare(host, target, ns);
+    let wait = prepare(host, target, ns);
     while (wait > 0) {
         await ns.asleep(wait - ns.getTimeSinceLastAug() + 200);
         getAttackStatus(servers, targets, ns);
-        wait = await prepare(host, target, ns);
+        wait = prepare(host, target, ns);
     }
-    // Begin attack run
+
+    // Now that the target is prepped, begin attack run
+    
 }
 
 /**
