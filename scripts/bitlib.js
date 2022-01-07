@@ -1,5 +1,4 @@
-const worker_size = 2.0; // in GB
-const big_iron_size = 204800000; // in GB. Any servers larger than this will get their own codebase.
+export const worker_size = 2.0; // in GB
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
@@ -15,24 +14,31 @@ export async function main(ns) {
     ns.tprint('getAllServerInfo:');
     let servers = getAllServerInfo({}, ns);
     ns.tprint(JSON.stringify(servers));
-
-    ns.tprint('findTargets:');
-    let targets = findTargets(servers, playerInfo, ns).slice(5);
-    for (const target of targets) {
-        ns.tprint(target);
-        tprintServerAsTarget(target, ns);
-    }
 }
 
-/** @param {import(".").NS } ns */
+/**
+ * @typedef {import(".").Player} Player
+ * @property {number} exploits - The number of exploits owned by the player
+ * @property {number} level - player hacking level
+ * @property {number} moneyAvailable - The amount of money the player has available
+ */
+
+/**
+ * Get a player object, and enrich it a bit
+ *
+ * @export
+ * @param {import(".").NS} ns
+ * @return {Player}
+ */
 export function getPlayerInfo(ns) {
-    let p = ns.getPlayer()
+    let p = ns.getPlayer();
+    p.level = ns.getHackingLevel();
     p.exploits = getProgramCount(ns);
-    p.moneyAvailable = ns.getServerMoneyAvailable('home')
+    p.moneyAvailable = ns.getServerMoneyAvailable('home');
     return p;
 }
 
-/** 
+/**
  * Pad a string. Defaults to right pad. The length is based on the pad string.
  * @param {string} pad - padding
  * @param {string} str - the base string
@@ -114,6 +120,7 @@ export class Server {
     constructor(servername, ns) {
         this.name = servername;
         this.ram = ns.getServerMaxRam(servername);
+        this.cores = ns.getServer(servername).cpuCores;
         this.freeRam = this.ram - ns.getServerUsedRam(servername);
         this.rooted = ns.hasRootAccess(servername);
         this.slots = 0;
@@ -155,11 +162,13 @@ export class Server {
         this.securityCurrent = ns.getServerSecurityLevel(servername);
         this.levelRequired = ns.getServerRequiredHackingLevel(servername);
     }
-    resetRunningThreadCounts() {
-        this.running = { hack: 0, grow: 0, weaken: 0 };
+    resetRunningServerThreadCounts() {
         this.w = 0;
         this.g = 0;
         this.h = 0;
+    }
+    resetRunningTargetThreadCounts() {
+        this.running = { hack: 0, grow: 0, weaken: 0 };
     }
 }
 
@@ -179,8 +188,8 @@ function scan(ns, parent, server, list) {
  * Get a list of all server names.
  *
  * @export
- * @param {import(".").NS } ns 
- * @return {string[]} 
+ * @param {import(".").NS } ns
+ * @return {string[]}
  */
 export function getServerNames(ns) {
     const list = [];
@@ -188,11 +197,11 @@ export function getServerNames(ns) {
     return list;
 }
 
-/** 
+/**
  * Return some basic info about all servers we can reach
- * @param {{Object.<string, Server>}} servers - a set of current servers to update. {} is acceptable and will be populated..
- * @param {import(".").NS } ns 
- * @returns {{Object.<string, Server>}} a set of all reachable servers.
+ * @param {Object.<string, Server>} servers - a set of current servers to update. {} is acceptable and will be populated..
+ * @param {import(".").NS } ns
+ * @returns {Object.<string, Server>} a set of all reachable servers.
  **/
 export function getAllServerInfo(servers, ns) {
     if (servers['home']) servers['home'].update(ns);
@@ -245,7 +254,7 @@ export function print3Up(displayData, ns) {
     // Two-Column. Assumes everything is pretty uniform. And pretty narrow.
     let n = 3;
     while (displayData.length >= n) {
-        let columns = Array(n).map((x) => displayData.pop());
+        let columns = Array(n).map(() => displayData.pop());
         for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
             let line = '';
             for (let colNum = 0; colNum < columns.length; colNum++) {

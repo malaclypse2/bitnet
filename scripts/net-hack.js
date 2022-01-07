@@ -1,9 +1,12 @@
-import { getPlayerInfo, getAllServerInfo, Server, root } from 'scripts/bitlib.js';
+import { getPlayerInfo, getAllServerInfo, Server, root } from '/scripts/bitlib.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.2; // Try to hack this percentage of money at a time
 let max_targets = 100;
 let sleep_time = 1000;
+let banned_targets = ['b-and-a'];
+const big_iron_size = 2048;   // in GB. Any servers larger than this will get their own codebase.
+const big_iron_level = 1000;  // Start applying big iron logic once we hit this level.
 
 const script_grow = '/scripts/util/growOnce.js';
 const script_weaken = '/scripts/util/weakenOnce.js';
@@ -80,6 +83,7 @@ async function runStart(ns) {
 
     let playerInfo = getPlayerInfo(ns);
     servers = getAllServerInfo({}, ns);
+    ns.print(servers);
 
     // Force a root check on available servers
     servers = rootServers(servers, ns);
@@ -103,6 +107,7 @@ async function runStart(ns) {
     let on30 = 0,
         on60 = 0,
         on600 = 0;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         on30 = ++on30 % 30;
         on60 = ++on60 % 60;
@@ -116,7 +121,7 @@ async function runStart(ns) {
         if (oldExploitCount != playerInfo.exploits || on60 == 0) {
             // We either have a new exploit, or it's been a little while.
             // Let's refresh our server info, and make sure there's nothing new to root.
-            servers = await rootServers(servers, ns);
+            servers = rootServers(servers, ns);
         }
 
         // re-evaluate our targets.
@@ -125,12 +130,14 @@ async function runStart(ns) {
             // Update server information
             target.update(ns);
             // Re-evaluate targetting criteria, including desired attack threads
-            target = await evaluateTarget(target, playerInfo, ns);
+            target = evaluateTarget(target, playerInfo, ns);
             targets[i] = target;
         }
 
         // Allocate any free server slots
-        servers = await allocateThreads(servers, targets, ns);
+        ns.print('PRE: '+ servers);
+        servers = allocateSwarmThreads(servers, targets, playerInfo, ns);
+        ns.print('POST: ' + servers);
         let pool = getPoolFromServers(servers, ns);
 
         // Occasionally consider adding a new target
@@ -155,7 +162,8 @@ function addTargets(playerInfo, numTargets, ns) {
     let x = potentialTargets.shift();
     while (!done && x) {
         let existing = targets.find((target) => target.name == x.name);
-        if (!existing) {
+        let banned = banned_targets.find( (target) => target == x.name);
+        if (!existing && !banned) {
             targets.push(x);
             done = targets.length >= numTargets + 1;
         }
@@ -163,7 +171,7 @@ function addTargets(playerInfo, numTargets, ns) {
     }
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import(".").NS } _ns */
 export function getPoolFromServers(servers, ns) {
     let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 };
     for (const server in servers) {
@@ -182,17 +190,35 @@ export function getPoolFromServers(servers, ns) {
     return pool;
 }
 
-/** @param {import(".").NS } ns */
-async function allocateThreads(servers, targets, ns) {
-    ns.print('Allocating attack threads.');
+/**
+ * Find servers with free capacity, and allocate them to targets with open attack requests.
+ * Updates all server and target information.
+ *
+ * @param {Object.<string,Server>} servers
+ * @param {Server[]} targets
+ * @param {import('scripts/bitlib.js').Player} player
+ * @param {import(".").NS } ns
+ * @return {Object.<string,Server>} returns servers
+ */
+function allocateSwarmThreads(servers, targets, player, ns) {
+    ns.print('Allocating swarm threads.');
+    ns.print('Alloc 1' + servers);
 
     // Make sure our notion of running attack threads against each target matches reality.
     // First, reset all our assumptions
     getAttackStatus(servers, targets, ns);
+    ns.print('Alloc 2' + servers);
 
     let freeSlots = 0;
-    for (const server in servers) {
-        freeSlots += servers[server].slots || 0;
+    for (const servername in servers) {
+        let server = servers[servername];
+        let isBigIron = (player.level >= big_iron_level) && (server.ram >= big_iron_size);
+        let o = server.slots
+        if (isBigIron) {
+            server.slots = 0;
+        }
+        freeSlots += server.slots;
+        ns.print(`Alloc: Counting free slots - S: ${server.name} Slots(old): ${o} Slots(now): ${server.slots}`)
     }
     let totalDesiredHackThreads = 0;
     let totalDesiredWeakenThreads = 0;
@@ -207,7 +233,7 @@ async function allocateThreads(servers, targets, ns) {
         if (delta.h > 0) totalDesiredHackThreads += delta.h;
         if (delta.w > 0) totalDesiredWeakenThreads += delta.w;
         if (delta.g > 0) totalDesiredGrowThreads += delta.g;
-		ns.print(`S: ${target.name} H: ${target.desired.hack} G: ${target.desired.grow} W: ${target.desired.weaken}`);
+        ns.print(`Alloc: Counting Desired Threads - S: ${target.name} H: ${target.desired.hack} G: ${target.desired.grow} W: ${target.desired.weaken}`);
     }
 
     ns.print(
@@ -300,18 +326,24 @@ async function allocateThreads(servers, targets, ns) {
         servers[servername] = server;
     }
 
+    ns.print('Alloc 3' + servers);
     return servers;
 }
 
-/** @param {import(".").NS } ns */
+/**
+ * Updates the attack status of servers and targets
+ * @param {Object.<string, Server>} servers 
+ * @param {Server[]} targets 
+ * @param {import(".").NS } ns
+ */
 export function getAttackStatus(servers, targets, ns) {
     for (const servername in servers) {
         const server = servers[servername];
-		server.resetRunningThreadCounts()
+		server.resetRunningServerThreadCounts()
 		server.update(ns)
     }
 	for (const target of targets) {
-		target.resetRunningThreadCounts()
+		target.resetRunningTargetThreadCounts()
 		target.update(ns)
 	}
     // Then reset by querying all the servers
@@ -375,7 +407,7 @@ function validateScripts(ns) {
  *
  * @export
  * @param {Server[]} servers
- * @param {*} playerInfo
+ * @param {} playerInfo
  * @param {import(".").NS } ns
  * @return {Server[]} sorted Array of targets
  */
@@ -399,7 +431,7 @@ export function findTargets(servers, playerInfo, ns) {
  * Add a score and assign desired hack/grow/weaken threads.
  * @export
  * @param {Server} server
- * @param {*} playerInfo
+ * @param {import('/scripts/bitlib.js').Player} playerInfo
  * @param {import(".").NS } ns 
  * @return {Server} 
  */
@@ -449,6 +481,7 @@ export function evaluateTarget(server, playerInfo, ns) {
         server.score = 0;
     }
 
+    ns.print(`EvaluateTarget - S: ${server.name} H: ${server.desired.hack} G: ${server.desired.grow} W: ${server.desired.weaken}`);
     return server;
 }
 
@@ -477,6 +510,5 @@ function checkC2Ports(ns) {
         if (cmd.key == 'hackThreshold' && cmd.action == 'set') hackThreshold = cmd.value;
         if (cmd.key == 'hackFactor' && cmd.action == 'set') hackFactor = cmd.value;
         if (cmd.key == 'max_targets' && cmd.action == 'set') max_targets = cmd.value;
-        if (cmd.key == 'logType' && cmd.action == 'set') logType = cmd.value;
     }
 }
