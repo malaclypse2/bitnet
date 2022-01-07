@@ -26,13 +26,19 @@ export async function main(ns) {
 
 /** @param {import(".").NS } ns */
 export function getPlayerInfo(ns) {
-    return {
-        level: ns.getHackingLevel(),
-        exploits: getProgramCount(ns),
-        moneyAvailable: ns.getServerMoneyAvailable('home'),
-    };
+    let p = ns.getPlayer()
+    p.exploits = getProgramCount(ns);
+    p.moneyAvailable = ns.getServerMoneyAvailable('home')
+    return p;
 }
 
+/** 
+ * Pad a string. Defaults to right pad. The length is based on the pad string.
+ * @param {string} pad - padding
+ * @param {string} str - the base string
+ * @param {boolean} [padLeft=false] - pad to the left?
+ * @return {string} - the string with padding applied
+ * */
 export function pad(pad, str, padLeft) {
     if (typeof str === 'undefined') return pad;
     if (padLeft) {
@@ -94,8 +100,17 @@ export function printfServer(server, ns) {
     return lines;
 }
 
-/** @param {import(".").NS } ns */
+/**
+ * @export
+ * @class Server
+ */
 export class Server {
+    /**
+     * Creates an instance of Server.
+     * @param {string} servername
+     * @param {import(".").NS } ns
+     * @memberof Server
+     */
     constructor(servername, ns) {
         this.name = servername;
         this.ram = ns.getServerMaxRam(servername);
@@ -160,13 +175,25 @@ function scan(ns, parent, server, list) {
     }
 }
 
+/**
+ * Get a list of all server names.
+ *
+ * @export
+ * @param {import(".").NS } ns 
+ * @return {string[]} 
+ */
 export function getServerNames(ns) {
     const list = [];
     scan(ns, '', 'home', list);
     return list;
 }
 
-/** @param {import(".").NS } ns */
+/** 
+ * Return some basic info about all servers we can reach
+ * @param {{Object.<string, Server>}} servers - a set of current servers to update. {} is acceptable and will be populated..
+ * @param {import(".").NS } ns 
+ * @returns {{Object.<string, Server>}} a set of all reachable servers.
+ **/
 export function getAllServerInfo(servers, ns) {
     if (servers['home']) servers['home'].update(ns);
     else servers['home'] = new Server('home', ns);

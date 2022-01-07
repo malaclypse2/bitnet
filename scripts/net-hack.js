@@ -10,7 +10,10 @@ const script_weaken = '/scripts/util/weakenOnce.js';
 const script_hack = '/scripts/util/hackOnce.js';
 
 // Globals so we can access them from other running instances of this program if we like.
+/** @type {Server[]} */
 var targets;
+
+/** @type {Object.<string, Server>} */
 var servers;
 
 /** @param {import(".").NS } ns */
@@ -367,7 +370,15 @@ function validateScripts(ns) {
     }
 }
 
-/** @param {import(".").NS } ns */
+/**
+ * Find targets eligible for attack, sorted by score.
+ *
+ * @export
+ * @param {Server[]} servers
+ * @param {*} playerInfo
+ * @param {import(".").NS } ns
+ * @return {Server[]} sorted Array of targets
+ */
 export function findTargets(servers, playerInfo, ns) {
     let targets = [];
     // Calculate a theoretical profitiablity score for each server
@@ -384,7 +395,14 @@ export function findTargets(servers, playerInfo, ns) {
     return targets;
 }
 
-/** @param {import(".").NS } ns */
+/**
+ * Add a score and assign desired hack/grow/weaken threads.
+ * @export
+ * @param {Server} server
+ * @param {*} playerInfo
+ * @param {import(".").NS } ns 
+ * @return {Server} 
+ */
 export function evaluateTarget(server, playerInfo, ns) {
     // We can only hack servers that are rooted, and that have a level lower than our level.
     if (server.levelRequired <= playerInfo.level && server.rooted) {
