@@ -7,7 +7,7 @@ import {
     print1Up,
     print2Up,
     print3Up,
-} from 'scripts/bitlib.js';
+} from '/scripts/bitlib.js';
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];
 const displayTargets = ['net-hack'];
@@ -65,8 +65,11 @@ async function runStart(displayTarget, displayType, ns) {
     ns.disableLog('sleep');
     ns.disableLog('asleep');
 
+    /** @type {Object.<string,Server} */
     let servers = {};
+    /** @type {Server[]} */
     let targets = [];
+    /** @type {import('/scripts/bitlib.js').Player} */
     let playerInfo = {};
     let processesToMonitor = [];
 
@@ -75,6 +78,7 @@ async function runStart(displayTarget, displayType, ns) {
     let on10 = 0,
         on50 = 0,
         on100 = 0;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         on10 = ++on10 % 10;
         on50 = ++on50 % 50;
@@ -89,7 +93,7 @@ async function runStart(displayTarget, displayType, ns) {
             getAttackStatus(servers, targets, ns);
         }
         if (on100 == 1) {
-            targets = targets.filter((target) => target.running.weaken > 0);
+            targets = targets.filter((target) => target.running.weaken || target.running.grow || target.running.hack);
         }
 
         printFancyLog(servers, targets, processesToMonitor, displayType, ns);

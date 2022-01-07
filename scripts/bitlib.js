@@ -121,7 +121,13 @@ export class Server {
         this.name = servername;
         this.ram = ns.getServerMaxRam(servername);
         this.cores = ns.getServer(servername).cpuCores;
-        this.freeRam = this.ram - ns.getServerUsedRam(servername);
+        // Try to leave an extra 10% free on home
+        if (this.name === "home") {
+            let cappedRam = Math.floor(this.ram * 0.9)
+            this.freeRam = cappedRam - ns.getServerUsedRam(servername);
+        } else {
+            this.freeRam = this.ram - ns.getServerUsedRam(servername);
+        }
         this.rooted = ns.hasRootAccess(servername);
         this.slots = 0;
         if (this.rooted) {

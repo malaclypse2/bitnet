@@ -5,8 +5,8 @@ let hackFactor = 0.2; // Try to hack this percentage of money at a time
 let max_targets = 100;
 let sleep_time = 1000;
 let banned_targets = ['b-and-a'];
-const big_iron_size = 2048;   // in GB. Any servers larger than this will get their own codebase.
-const big_iron_level = 5000;  // Start applying big iron logic once we hit this level.
+const big_iron_size = 2048; // in GB. Any servers larger than this will get their own codebase.
+const big_iron_level = 5000; // Start applying big iron logic once we hit this level.
 
 const script_grow = '/scripts/util/growOnce.js';
 const script_weaken = '/scripts/util/weakenOnce.js';
@@ -103,6 +103,9 @@ async function runStart(ns) {
     firstTarget = evaluateTarget(firstTarget, playerInfo, ns);
     targets.unshift(firstTarget);
 
+    // Add an extra target, since n00dles is pretty small, even early.
+    addTargets(playerInfo, 1, ns);
+
     //Set up a few timers (approx 30sec, 1min, 10min)
     let on30 = 0,
         on60 = 0,
@@ -135,17 +138,21 @@ async function runStart(ns) {
         }
 
         // Allocate any free server slots
-        ns.print('PRE: '+ servers);
+        ns.print('PRE: ' + servers);
         servers = allocateSwarmThreads(servers, targets, playerInfo, ns);
         ns.print('POST: ' + servers);
         let pool = getPoolFromServers(servers, ns);
 
         // Occasionally consider adding a new target
         if (on30 == 1) {
-            // If we have a bunch of free threads, go ahead and add new targets
+            // If we have a bunch of free threads, go ahead and add new targets. 
+            // One target per thousand free threads
             let additionalTargets = Math.floor(pool.free / 1000) + 1;
             additionalTargets = Math.min(additionalTargets, max_targets - targets.length);
-            if (pool.free > 1000 && additionalTargets) {
+            // Only if we have more free threads than we use, on average.
+            let enoughFree = (pool.free > (pool.running / targets.length));
+
+            if (enoughFree && additionalTargets) {
                 addTargets(playerInfo, additionalTargets, ns);
             }
         }
@@ -162,7 +169,7 @@ function addTargets(playerInfo, numTargets, ns) {
     let x = potentialTargets.shift();
     while (!done && x) {
         let existing = targets.find((target) => target.name == x.name);
-        let banned = banned_targets.find( (target) => target == x.name);
+        let banned = banned_targets.find((target) => target == x.name);
         if (!existing && !banned) {
             targets.push(x);
             done = targets.length >= numTargets + 1;
@@ -202,23 +209,20 @@ export function getPoolFromServers(servers, ns) {
  */
 function allocateSwarmThreads(servers, targets, player, ns) {
     ns.print('Allocating swarm threads.');
-    ns.print('Alloc 1' + servers);
 
     // Make sure our notion of running attack threads against each target matches reality.
     // First, reset all our assumptions
     getAttackStatus(servers, targets, ns);
-    ns.print('Alloc 2' + servers);
 
     let freeSlots = 0;
     for (const servername in servers) {
         let server = servers[servername];
-        let isBigIron = (player.level >= big_iron_level) && (server.ram >= big_iron_size);
-        let o = server.slots
+        let isBigIron = player.level >= big_iron_level && server.ram >= big_iron_size;
+        let o = server.slots;
         if (isBigIron) {
             server.slots = 0;
         }
         freeSlots += server.slots;
-        ns.print(`Alloc: Counting free slots - S: ${server.name} Slots(old): ${o} Slots(now): ${server.slots}`)
     }
     let totalDesiredHackThreads = 0;
     let totalDesiredWeakenThreads = 0;
@@ -233,7 +237,6 @@ function allocateSwarmThreads(servers, targets, player, ns) {
         if (delta.h > 0) totalDesiredHackThreads += delta.h;
         if (delta.w > 0) totalDesiredWeakenThreads += delta.w;
         if (delta.g > 0) totalDesiredGrowThreads += delta.g;
-        ns.print(`Alloc: Counting Desired Threads - S: ${target.name} H: ${target.desired.hack} G: ${target.desired.grow} W: ${target.desired.weaken}`);
     }
 
     ns.print(
@@ -326,26 +329,25 @@ function allocateSwarmThreads(servers, targets, player, ns) {
         servers[servername] = server;
     }
 
-    ns.print('Alloc 3' + servers);
     return servers;
 }
 
 /**
  * Updates the attack status of servers and targets
- * @param {Object.<string, Server>} servers 
- * @param {Server[]} targets 
+ * @param {Object.<string, Server>} servers
+ * @param {Server[]} targets
  * @param {import(".").NS } ns
  */
 export function getAttackStatus(servers, targets, ns) {
     for (const servername in servers) {
         const server = servers[servername];
-		server.resetRunningServerThreadCounts()
-		server.update(ns)
+        server.resetRunningServerThreadCounts();
+        server.update(ns);
     }
-	for (const target of targets) {
-		target.resetRunningTargetThreadCounts()
-		target.update(ns)
-	}
+    for (const target of targets) {
+        target.resetRunningTargetThreadCounts();
+        target.update(ns);
+    }
     // Then reset by querying all the servers
     for (const servername in servers) {
         let server = servers[servername];
@@ -432,8 +434,8 @@ export function findTargets(servers, playerInfo, ns) {
  * @export
  * @param {Server} server
  * @param {import('/scripts/bitlib.js').Player} playerInfo
- * @param {import(".").NS } ns 
- * @return {Server} 
+ * @param {import(".").NS } ns
+ * @return {Server}
  */
 export function evaluateTarget(server, playerInfo, ns) {
     // We can only hack servers that are rooted, and that have a level lower than our level.
@@ -481,7 +483,9 @@ export function evaluateTarget(server, playerInfo, ns) {
         server.score = 0;
     }
 
-    ns.print(`EvaluateTarget - S: ${server.name} H: ${server.desired.hack} G: ${server.desired.grow} W: ${server.desired.weaken}`);
+    ns.print(
+        `EvaluateTarget - S: ${server.name} H: ${server.desired.hack} G: ${server.desired.grow} W: ${server.desired.weaken}`
+    );
     return server;
 }
 
