@@ -1,6 +1,7 @@
 import { getPlayerInfo, getAllServerInfo, root } from '/scripts/bit-lib.js';
-import { Server, C2Command, C2Response } from "/scripts/bit-types";
-import { readC2messages } from '/scripts/net.js';
+import { C2Command, C2Response } from "/scripts/classes/C2Message.js";
+import { Server } from '/scripts/classes/Server.js';
+import { readC2messages, sendC2message } from '/scripts/net.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.2; // Try to hack this percentage of money at a time
@@ -530,7 +531,8 @@ function processC2(ns) {
         if (cmd.action === 'get') {
             switch(cmd.key) {
                 case 'targets':
-                    msg = new C2Response(cmd.from, 'net-hack', 'response', )
+                    msg = new C2Response(cmd.from, 'net-hack', cmd.action, cmd.key, targets, ns);
+                    sendC2message(msg, ns);
                     // push targets[] back onto the port?
                     break;
             default:
@@ -540,5 +542,3 @@ function processC2(ns) {
     }
 }
 
-function processC2Commands() {}
-function processC2Responses() {}

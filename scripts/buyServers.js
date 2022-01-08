@@ -1,5 +1,5 @@
 import { pad, print2Up, print1Up } from '/scripts/bit-lib.js';
-import { Server } from "/scripts/bit-types";
+import { Server } from "/scripts/classes/Server";
 
 /** @param {import(".").NS} ns */
 export async function main(ns) {

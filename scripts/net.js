@@ -31,7 +31,7 @@
 const c2_port = 2;
 
 // eslint-disable-next-line no-unused-vars
-import { C2Command, C2Message } from '/scripts/bit-types.js';
+import { C2Command, C2Message } from '/scripts/classes/C2Message';
 
 export class SubSystem {
     /**
@@ -50,7 +50,6 @@ export class SubSystem {
     } // end constructor()
 
     /**
-     *
      * @param {import("/scripts/index.js").NS} ns
      */
     refreshStatus(ns) {
@@ -98,7 +97,7 @@ export async function main(ns) {
     // command aliases
     if (args._.length > 0) {
         if (args._[0] === 'mon') args._[0] = 'monitor';
-    }    
+    }
 
     // Process command line
     if (args._.length > 0) {
@@ -183,7 +182,7 @@ async function runRestartCommand(host, args, ns) {
 
 /**
  * Do something with the hacking subsystem
- * 
+ *
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
  * @param {import(".").NS} ns
@@ -192,18 +191,19 @@ async function runHackCommand(host, args, ns) {}
 
 /**
  * Do something with the monitoring subsystem
- * 
+ *
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
  * @param {import('/scripts/index.js').NS} ns
  */
 async function runMonitorCommand(host, args, ns) {
     if (args.help) {
-        let msg = `monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.`
+        let msg =
+            'monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.';
         ns.tprint(msg);
     } else if (args._.length > 0) {
         // See if we can find a tail window to open
-        let mon = subsystems.find( (sys) => sys.name = 'net-mon');
+        let mon = subsystems.find((sys) => (sys.name = 'net-mon'));
         if (mon.status !== 'RUNNING') {
             ns.exec('/scripts/net-monitor.js', host, 1, '--start');
         }

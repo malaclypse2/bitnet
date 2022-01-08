@@ -1,4 +1,4 @@
-import { findTargets, getAttackStatus, getPoolFromServers } from 'scripts/net-hack.js';
+import { findTargets, getAttackStatus, getPoolFromServers } from '/scripts/net-hack.js';
 import {
     getPlayerInfo,
     getAllServerInfo,

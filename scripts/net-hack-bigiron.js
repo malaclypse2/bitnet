@@ -1,5 +1,5 @@
 import { getAllServerInfo, getPlayerInfo, printfSeverAsTarget, worker_size } from '/scripts/bit-lib.js';
-import { Server } from "/scripts/bit-types.js";
+import { Server } from "/scripts/classes/Server.js";
 import { findTargets, getAttackStatus } from '/scripts/net-hack.js';
 /** @typedef {Server} */
 
