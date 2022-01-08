@@ -149,7 +149,7 @@ async function runStartCommand(host, args, ns) {
  *
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
- * @param {import(".").NS} ns
+ * @param {import('/scripts/index.js').NS} ns
  */
 async function runStopCommand(host, args, ns) {
     ns.tprint(`Killing running subsystems`);
@@ -187,7 +187,40 @@ async function runRestartCommand(host, args, ns) {
  * @param {*} args - flags passed in from the command line.
  * @param {import(".").NS} ns
  */
-async function runHackCommand(host, args, ns) {}
+async function runHackCommand(host, args, ns) {
+        if (args.help) {
+            let msg =`
+            net-hack controls. 
+            Examples: 
+            net hack add target n00dles
+            net hack drop target n00dles
+            `;
+            ns.tprint(msg);
+        } else if (args._.length > 0) {
+            let cmd = args._.pop()
+            // Handle the command.
+            if (cmd === 'add' && args._.length >= 2) {
+                // 'net hack add' (probably net hack add target <someserver>?)
+                let key = args._.pop();
+                let value = args._.pop() 
+                let msg = new C2Command ('net-hack', 'net', 'add', key, value, ns);
+                await sendC2message(msg, ns);
+            }
+            if (cmd === 'drop' && args._.length >= 2) {
+                // 'net hack add' (probably net hack add target <someserver>?)
+                let key = args._.pop();
+                let value = args._.pop();
+                let msg = new C2Command('net-hack', 'net', 'drop', key, value, ns);
+                await sendC2message(msg, ns);
+            } else {
+                let msg = `I don't know how to handle the command '${cmd}' with additional options (${args._.join(
+                    ','
+                )}) `;
+                ns.tprint(msg);
+            }
+        }
+
+}
 
 /**
  * Do something with the monitoring subsystem
@@ -203,18 +236,18 @@ async function runMonitorCommand(host, args, ns) {
         ns.tprint(msg);
     } else if (args._.length > 0) {
         // See if we can find a tail window to open
-        let mon = subsystems.find((sys) => (sys.name = 'net-mon'));
+        let mon = subsystems.find((sys) => sys.name === 'net-monitor');
         if (mon.status !== 'RUNNING') {
             ns.exec('/scripts/net-monitor.js', host, 1, '--start');
         }
         mon.refreshStatus(ns);
         if (mon.status === 'RUNNING') {
-            ns.tail(mon.filename, mon.host, ...mon.args);
+            ns.tail(mon.filename, mon.host, ...mon.process.args);
         }
         // Broadcast to the monitor app.
         let display = args._.shift();
-        let cmd = new C2Command('net-mon', 'net', 'set', 'display', display, ns);
-        sendC2message(cmd, ns);
+        let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
+        await sendC2message(cmd, ns);
     }
 }
 
@@ -242,8 +275,10 @@ async function runStatusCommand(host, args, ns) {
  * @param {C2Command} msg
  * @param {import("/scripts/index.js").NS} ns
  */
-export function sendC2message(msg, ns) {
-    ns.writePort(c2_port, msg);
+export async function sendC2message(msg, ns) {
+    let s = JSON.stringify(msg);
+    await ns.writePort(c2_port, s);
+    ns.tprint(`C2 Message sent: ${s}`)
 }
 
 /**
@@ -255,7 +290,7 @@ export function sendC2message(msg, ns) {
  * @param {import("/scripts/index.js").NS} ns
  * @returns {C2Message[]}
  */
-export function readC2messages(system, ns) {
+export async function readC2messages(system, ns) {
     let allmsgs = [];
     let inbox = [];
     // Get everything from the queue
@@ -265,15 +300,18 @@ export function readC2messages(system, ns) {
         allmsgs.push(msg);
         msg = ns.readPort(2);
     }
-    // Figure out which messages we shouyld keep
+    // Figure out which messages we should keep
     while (allmsgs.length > 0) {
         msg = allmsgs.pop();
+        msg = JSON.parse(msg);
         if (msg.type === 'C2Message' && msg.to === system) {
             inbox.push(msg);
+            ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
+
         } else {
             let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
-            if (msg.createtime < expiryTime) {
-                sendC2message(msg, ns);
+            if (msg.createtime > expiryTime) {
+                await sendC2message(msg, ns);
             }
         }
     }

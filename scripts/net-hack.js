@@ -1,5 +1,5 @@
 import { getPlayerInfo, getAllServerInfo, root } from '/scripts/bit-lib.js';
-import { C2Command, C2Response } from "/scripts/classes/C2Message.js";
+import { C2Command, C2Response } from '/scripts/classes/C2Message.js';
 import { Server } from '/scripts/classes/Server.js';
 import { readC2messages, sendC2message } from '/scripts/net.js';
 
@@ -8,6 +8,8 @@ let hackFactor = 0.2; // Try to hack this percentage of money at a time
 let max_targets = 100;
 let sleep_time = 1000;
 let banned_targets = ['b-and-a'];
+let _DEBUG = false;
+
 const big_iron_size = 2048; // in GB. Any servers larger than this will get their own codebase.
 const big_iron_level = 5000; // Start applying big iron logic once we hit this level.
 
@@ -119,7 +121,7 @@ async function runStart(ns) {
         on60 = ++on60 % 60;
         on600 = ++on600 % 600;
         // Check for comand & control
-        // checkC2Ports(ns)
+        await processC2(ns);
 
         // Root any available servers
         const oldExploitCount = playerInfo.exploits;
@@ -181,21 +183,20 @@ function addTargets(playerInfo, numTargets, ns) {
     }
 }
 
-/** @param {import(".").NS } _ns */
+/**
+ * @param {Object.<string,Server>} servers
+ * @param {import('/scripts/index.js').NS} ns */
 export function getPoolFromServers(servers, ns) {
     let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 };
-    for (const server in servers) {
-        const info = servers[server];
-        // Treat undefined as 0 here.
-        const free = info.slots || 0;
-        const grow = info.g || 0;
-        const hack = info.h || 0;
-        const weaken = info.w || 0;
-        pool.free += free;
-        pool.grow += grow;
-        pool.hack += hack;
-        pool.weaken += weaken;
-        pool.running += grow + hack + weaken;
+    let s = Array.from(Object.values(servers));
+
+    pool.free = s.reduce((sum, server) => sum + server.slots, 0);
+    pool.hack = s.reduce((sum, server) => sum + server.h, 0);
+    pool.grow = s.reduce((sum, server) => sum + server.g, 0);
+    pool.weaken = s.reduce((sum, server) => sum + server.w, 0);
+    pool.running += pool.grow + pool.hack + pool.weaken;
+    if (_DEBUG) {
+        ns.tprint(`Calculating pool as: ${JSON.stringify(pool)}.`);
     }
     return pool;
 }
@@ -300,30 +301,16 @@ function allocateSwarmThreads(servers, targets, player, ns) {
                     server.slots
                 );
                 if (desired > 0) {
-                    let retval = ns.exec(
-                        attackScripts[attackType],
-                        server.name,
-                        desired,
-                        target.name,
-                        ns.getTimeSinceLastAug()
-                    );
+                    let t = ns.getTimeSinceLastAug();
+                    let args = [target.name, t];
+                    let retval = ns.exec(attackScripts[attackType], server.name, desired, ...args);
                     if (retval > 0) {
                         allocated[attackType] -= desired;
                         server.slots -= desired;
                         target.running[attackType] += desired;
-                        switch (attackType) {
-                            case 'hack':
-                                server.h += desired;
-                                break;
-                            case 'grow':
-                                server.g += desired;
-                                break;
-                            case 'weaken':
-                                server.w += desired;
-                                break;
-                            default:
-                                break;
-                        }
+                        // TODO: bleh. code smell. Sets server.w, server.g, or server.h
+                        let letter = attackType[0];
+                        server[letter] += desired;
                     } // end if succeeded.
                 }
             }
@@ -411,7 +398,7 @@ function validateScripts(ns) {
  *
  * @export
  * @param {Server[]} servers
- * @param {} playerInfo
+ * @param {import('/scripts/bit-lib.js').Player} playerInfo
  * @param {import(".").NS } ns
  * @return {Server[]} sorted Array of targets
  */
@@ -492,53 +479,91 @@ export function evaluateTarget(server, playerInfo, ns) {
 }
 
 /** @param {import(".").NS } ns */
-function processC2(ns) {
+async function processC2(ns) {
     // To start with, we can allow adjusting some of our global parameters via c2:
     // hackThreshold, hackFactor, max_targets
-    let commands = readC2messages('net-hack', ns);
+    let commands = await readC2messages('net-hack', ns);
 
     while (commands.length > 0) {
         // expects {owner:'net-hack', action: 'set', key:'some-key', value:'some-value'}
         // ...at least for now.
         let cmd = commands.pop();
         /** type {C2Message} */
-        let msg;
-        ns.tprint('Reading C2 command: ' + cmd);
-        if (cmd.action === 'set') {
-            switch (cmd.key) {
-                case 'hackThreshold':
-                    hackThreshold = cmd.value;
-                    break;
-                case 'hackFactor':
-                    hackFactor = cmd.value;
-                    break;
-                case 'max_targets':
-                    max_targets = cmd.value;
-                    break;
-                default:
-                    break;
-            }
-        } // End set
-        if (cmd.action === 'run') {
-            switch (cmd.key) {
-                case 'stop':
-                    runStop(ns);
-                    break;
-                default:
-                    break;
-            }
-        } // End run
-        if (cmd.action === 'get') {
-            switch(cmd.key) {
-                case 'targets':
-                    msg = new C2Response(cmd.from, 'net-hack', cmd.action, cmd.key, targets, ns);
-                    sendC2message(msg, ns);
-                    // push targets[] back onto the port?
-                    break;
-            default:
-                break;
-            }
+        if (cmd.subtype === 'C2Command') {
+            await processC2Command(cmd, ns);
+        } else if (cmd.subtype === 'C2Response') {
+            await processC2Response(cmd, ns);
         }
     }
 }
 
+/**
+ * Process C2 Commands from the port
+ * @param {C2Command} cmd
+ * @param {import('/scripts/index.js').NS} ns
+ */
+async function processC2Command(cmd, ns) {
+    let msg;
+    if (cmd.action === 'set') {
+        switch (cmd.key) {
+            case 'hackThreshold':
+                hackThreshold = cmd.value;
+                break;
+            case 'hackFactor':
+                hackFactor = cmd.value;
+                break;
+            case 'max_targets':
+                max_targets = cmd.value;
+                break;
+            default:
+                break;
+        }
+    } // End set
+    else if (cmd.action === 'get') {
+        switch (cmd.key) {
+            case 'targets':
+                // Send the target list back over the port.
+                msg = new C2Response(cmd.from, 'net-hack', cmd.action, cmd.key, targets, ns);
+                await sendC2message(msg, ns);
+                break;
+            case 'banned':
+                msg = new C2Response(cmd.from, 'net-hack', cmd.action, cmd.key, banned_targets, ns);
+                await sendC2message(msg, ns);
+                break;
+            default:
+                break;
+        }
+    } // end get
+    else if (cmd.action === 'add') {
+        switch (cmd.key) {
+            case 'target': {
+                let possibleTargets = findTargets(servers, getPlayerInfo(ns), ns);
+                for (const target of possibleTargets) {
+                    if (target.name === cmd.value) targets.push(target);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    } // end add
+    else if (cmd.action === 'drop') {
+        switch (cmd.key) {
+            case 'target':
+                banned_targets.push(cmd.value);
+                targets = targets.filter((t) => t.name !== cmd.value);
+                break;
+            default:
+                break;
+        }
+    } // end drop
+}
+
+/**
+ * Process C2 Responses from the port
+ * @param {C2Response} cmd
+ * @param {import('/scripts/index.js').NS} ns
+ */
+async function processC2Response(cmd, ns) {
+    // pass
+}

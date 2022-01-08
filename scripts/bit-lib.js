@@ -1,7 +1,5 @@
 import { Server } from "/scripts/classes/Server.js";
 
-export const worker_size = 2.0; // in GB
-
 /** @param {import(".").NS } ns */
 export async function main(ns) {
     ns.tprint('No user servicable parts inside.');

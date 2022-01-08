@@ -1,7 +1,6 @@
 import { getAllServerInfo, getPlayerInfo, printfSeverAsTarget, worker_size } from '/scripts/bit-lib.js';
 import { Server } from "/scripts/classes/Server.js";
 import { findTargets, getAttackStatus } from '/scripts/net-hack.js';
-/** @typedef {Server} */
 
 const script_grow = '/scripts/util/growOnce.js';
 const script_weaken = '/scripts/util/weakenOnce.js';
@@ -38,6 +37,7 @@ export async function main(ns) {
     }
 
     // Now that the target is prepped, begin attack run
+    
 
 }
 

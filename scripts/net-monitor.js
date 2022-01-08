@@ -9,6 +9,7 @@ import {
     print3Up,
 } from '/scripts/bit-lib.js';
 import { readC2messages } from '/scripts/net.js';
+import { C2Command } from '/scripts/classes/C2Message.js';
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];
 const displayTargets = ['net-hack'];
@@ -75,6 +76,7 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
     let processesToMonitor = [];
 
     ns.tail();
+    let lastlog = `Hmm`;
 
     let on10 = 0,
         on50 = 0,
@@ -84,11 +86,22 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
         on10 = ++on10 % 10;
         on50 = ++on50 % 50;
         on100 = ++on100 % 100;
-        if (on50 == 1) {
-            let inbox = readC2messages('net-monitor', ns);
+        if (on10 == 1) {
+            lastlog = 'Checking mailbox...'
+            let inbox = await readC2messages('net-monitor', ns);
             for (const msg of inbox) {
+                lastlog = (`handlling C2 message: ${JSON.stringify(msg)}`)
                 if (msg.subtype === 'C2Command' && msg.action === 'set') {
-                    if (msg.key === 'display') displayType = msg.value;
+                    if (msg.key === 'display') {
+                        if (msg.value === 'next') {
+                            let i = displayTypes.findIndex((t) => t === displayType);
+                            i = ++i % displayTypes.length;
+                            displayType = displayTypes[i];
+                        } else {
+                            let newDisplayType = displayTypes.find((t) => t.toLower() === msg.value.toLower());
+                            if (newDisplayType) displayType = newDisplayType;
+                        }
+                    }
                 }
             }
         }
@@ -106,6 +119,7 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
         }
 
         printFancyLog(servers, targets, processesToMonitor, displayType, ns);
+        ns.print(lastlog);
         await ns.asleep(100);
     }
 }

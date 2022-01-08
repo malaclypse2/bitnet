@@ -22,7 +22,6 @@ export class C2Message {
 export class C2Command extends C2Message {
     constructor(to, from, action, key, value, ns) {
         super(to, from, action, key, value, ns);
-
         this.subtype = 'C2Command';
     }
 }
@@ -30,7 +29,6 @@ export class C2Command extends C2Message {
 export class C2Response extends C2Message {
     constructor(to, from, action, key, value, ns) {
         super(to, from, action, key, value, ns);
-
         this.subtype = 'C2Response';
     }
 }
