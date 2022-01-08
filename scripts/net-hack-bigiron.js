@@ -1,4 +1,5 @@
-import { getAllServerInfo, getPlayerInfo, printfSeverAsTarget, Server, worker_size } from '/scripts/bitlib.js';
+import { getAllServerInfo, getPlayerInfo, printfSeverAsTarget, worker_size } from '/scripts/bit-lib.js';
+import { Server } from "/scripts/bit-types.js";
 import { findTargets, getAttackStatus } from '/scripts/net-hack.js';
 /** @typedef {Server} */
 
@@ -37,7 +38,7 @@ export async function main(ns) {
     }
 
     // Now that the target is prepped, begin attack run
-    
+
 }
 
 /**
