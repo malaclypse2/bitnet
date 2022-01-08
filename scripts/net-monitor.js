@@ -7,7 +7,8 @@ import {
     print1Up,
     print2Up,
     print3Up,
-} from '/scripts/bitlib.js';
+} from './bit-lib.js';
+import { readC2messages } from '/scripts/net.js';
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];
 const displayTargets = ['net-hack'];
@@ -37,7 +38,7 @@ export async function main(ns) {
         ns.tprint('Stopping any running monitors.');
         runStop(ns);
     } else if (args.start) {
-        await runStart(args.target, args.display, ns);
+        await runDisplayLoop(args.target, args.display, ns);
     } else {
         let msg = `
 			Invalid flags.  Command line should include either:
@@ -53,7 +54,7 @@ export async function main(ns) {
 }
 
 /** @param {import(".").NS } ns */
-async function runStart(displayTarget, displayType, ns) {
+async function runDisplayLoop(displayTarget, displayType, ns) {
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
     ns.disableLog('getServerUsedRam');
@@ -69,7 +70,7 @@ async function runStart(displayTarget, displayType, ns) {
     let servers = {};
     /** @type {Server[]} */
     let targets = [];
-    /** @type {import('/scripts/bitlib.js').Player} */
+    /** @type {import('./bit-lib.js').Player} */
     let playerInfo = {};
     let processesToMonitor = [];
 
@@ -83,6 +84,14 @@ async function runStart(displayTarget, displayType, ns) {
         on10 = ++on10 % 10;
         on50 = ++on50 % 50;
         on100 = ++on100 % 100;
+        if (on50 == 1) {
+            let inbox = readC2messages('net-monitor', ns);
+            for (const msg of inbox) {
+                if (msg.subtype === 'C2Command' && msg.action === 'set') {
+                    if (msg.key === 'display') displayType = msg.value;
+                }
+            }
+        }
         if (on100 == 1) {
             playerInfo = getPlayerInfo(ns);
             servers = getAllServerInfo(servers, ns);

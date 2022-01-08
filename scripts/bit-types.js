@@ -1,4 +1,4 @@
-import { worker_size } from "./bit-lib";
+import { worker_size } from './bit-lib';
 
 /**
  * @export
@@ -17,7 +17,7 @@ export class Server {
         this.ram = ns.getServerMaxRam(servername);
         this.cores = ns.getServer(servername).cpuCores;
         // Try to leave an extra 10% free on home
-        if (this.name === "home") {
+        if (this.name === 'home') {
             let cappedRam = Math.floor(this.ram * 0.9);
             this.freeRam = cappedRam - ns.getServerUsedRam(servername);
         } else {
@@ -70,5 +70,42 @@ export class Server {
     }
     resetRunningTargetThreadCounts() {
         this.running = { hack: 0, grow: 0, weaken: 0 };
+    }
+}
+
+export class C2Message {
+    /**
+     * @param {string} from
+     * @param {string} to
+     * @param {string} action
+     * @param {string} key
+     * @param {*} value
+     * @param {import("/scripts/index.js").NS} ns
+     */
+    constructor(to, from, action, key, value, ns) {
+        this.type = 'C2Message';
+        this.subtype = '';
+        this.to = to;
+        this.from = from;
+        this.action = action;
+        this.key = key;
+        this.value = value;
+        this.createtime = ns.getTimeSinceLastAug();
+    }
+}
+
+export class C2Command extends C2Message {
+    constructor(to, from, action, key, value, ns) {
+        super(to, from, action, key, value, ns);
+
+        this.subtype = 'C2Command';
+    }
+}
+
+export class C2Response extends C2Message {
+    constructor(to, from, action, key, value, ns) {
+        super(to, from, action, key, value, ns);
+
+        this.subtype = 'C2Response';
     }
 }

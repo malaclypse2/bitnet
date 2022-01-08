@@ -1,4 +1,6 @@
-import { getPlayerInfo, getAllServerInfo, Server, root } from '/scripts/bitlib.js';
+import { getPlayerInfo, getAllServerInfo, root } from './bit-lib.js';
+import { Server, C2Command, C2Response } from "./bit-types";
+import { readC2messages } from '/scripts/net.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.2; // Try to hack this percentage of money at a time
@@ -203,7 +205,7 @@ export function getPoolFromServers(servers, ns) {
  *
  * @param {Object.<string,Server>} servers
  * @param {Server[]} targets
- * @param {import('scripts/bitlib.js').Player} player
+ * @param {import('/scripts/bit-lib.js').Player} player
  * @param {import(".").NS } ns
  * @return {Object.<string,Server>} returns servers
  */
@@ -432,7 +434,7 @@ export function findTargets(servers, playerInfo, ns) {
  * Add a score and assign desired hack/grow/weaken threads.
  * @export
  * @param {Server} server
- * @param {import('/scripts/bitlib.js').Player} playerInfo
+ * @param {import('./bit-lib.js').Player} playerInfo
  * @param {import(".").NS } ns
  * @return {Server}
  */
@@ -489,27 +491,18 @@ export function evaluateTarget(server, playerInfo, ns) {
 }
 
 /** @param {import(".").NS } ns */
-function checkC2Ports(ns) {
+function processC2(ns) {
     // To start with, we can allow adjusting some of our global parameters via c2:
-    // hackThreshold, hackFactor, max_targets, logType
-    let commands = [];
-    let cmd = ns.readPort(2);
-    while (cmd !== 'NULL PORT DATA') {
-        commands.push(cmd);
-        cmd = ns.readPort(2);
-    }
+    // hackThreshold, hackFactor, max_targets
+    let commands = readC2messages('net-hack', ns);
+
     while (commands.length > 0) {
         // expects {owner:'net-hack', action: 'set', key:'some-key', value:'some-value'}
         // ...at least for now.
-        cmd = commands.pop();
+        let cmd = commands.pop();
+        /** type {C2Message} */
+        let msg;
         ns.tprint('Reading C2 command: ' + cmd);
-        if (cmd == undefined || cmd == null) {
-            continue;
-        }
-        if (cmd.owner != 'net-hack') {
-            ns.writePort(cmd);
-            continue;
-        }
         if (cmd.action === 'set') {
             switch (cmd.key) {
                 case 'hackThreshold':
@@ -521,7 +514,6 @@ function checkC2Ports(ns) {
                 case 'max_targets':
                     max_targets = cmd.value;
                     break;
-
                 default:
                     break;
             }
@@ -531,7 +523,6 @@ function checkC2Ports(ns) {
                 case 'stop':
                     runStop(ns);
                     break;
-
                 default:
                     break;
             }
@@ -539,6 +530,7 @@ function checkC2Ports(ns) {
         if (cmd.action === 'get') {
             switch(cmd.key) {
                 case 'targets':
+                    msg = new C2Response(cmd.from, 'net-hack', 'response', )
                     // push targets[] back onto the port?
                     break;
             default:
@@ -547,3 +539,6 @@ function checkC2Ports(ns) {
         }
     }
 }
+
+function processC2Commands() {}
+function processC2Responses() {}

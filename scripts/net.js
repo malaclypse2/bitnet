@@ -9,11 +9,11 @@
  * The idea is to run, do our thing, then exit.
  * Don't stay resident longer than needed.
  * Try not to use more ram than needed.
- * 
+ *
  * Examples I'd like to handle:
- * 
+ *
  * (Done)
- * net start 
+ * net start
  * net stop
  * net status
  *
@@ -26,8 +26,12 @@
  * net buy hacknet
  * net upgrade servers
  * net backdoor
- * 
+ *
  */
+const c2_port = 2;
+
+// eslint-disable-next-line no-unused-vars
+import { C2Command, C2Message } from '/scripts/bit-types.js';
 
 export class SubSystem {
     /**
@@ -71,8 +75,8 @@ export const subsystems = [
 ];
 
 /**
- * @param {import(".").NS } ns 
-*/
+ * @param {import(".").NS } ns
+ */
 export async function main(ns) {
     // arg parsing
     let args = ns.flags([['help', false]]);
@@ -83,24 +87,20 @@ export async function main(ns) {
         sys.refreshStatus(ns);
     }
 
-    if (args.help) {
-        let msg = `	This is the command and control program. Try one of the following:
-        net start
-        net stop
-        net restart
-		`;
-        ns.tprint(msg);
-    }
-
     let handlers = {
         start: runStartCommand,
         stop: runStopCommand,
         restart: runRestartCommand,
-        hack: runHackCommand,
-        mon: runMonCommand,
         status: runStatusCommand,
+        hack: runHackCommand,
+        monitor: runMonitorCommand,
     };
+    // command aliases
+    if (args._.length > 0) {
+        if (args._[0] === 'mon') args._[0] = 'monitor';
+    }    
 
+    // Process command line
     if (args._.length > 0) {
         let command = args._.shift();
         // Call one of the subsystems.
@@ -108,6 +108,16 @@ export async function main(ns) {
             await handlers[command](host, args, ns);
         } else {
             ns.tprint(`I don't know how to handle the command '${command}'`);
+        }
+    } else {
+        if (args.help) {
+            let msg = `	This is the command and control program. Try one of the following:
+            net start - start persistent servers
+            net stop - stop persistent servers
+            net restart - stop then start persistent servers
+            net monitor --help
+            `;
+            ns.tprint(msg);
         }
     }
 }
@@ -173,6 +183,7 @@ async function runRestartCommand(host, args, ns) {
 
 /**
  * Do something with the hacking subsystem
+ * 
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
  * @param {import(".").NS} ns
@@ -181,11 +192,31 @@ async function runHackCommand(host, args, ns) {}
 
 /**
  * Do something with the monitoring subsystem
+ * 
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
- * @param {import(".").NS} ns
+ * @param {import('/scripts/index.js').NS} ns
  */
-async function runMonCommand(host, args, ns) {}
+async function runMonitorCommand(host, args, ns) {
+    if (args.help) {
+        let msg = `monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.`
+        ns.tprint(msg);
+    } else if (args._.length > 0) {
+        // See if we can find a tail window to open
+        let mon = subsystems.find( (sys) => sys.name = 'net-mon');
+        if (mon.status !== 'RUNNING') {
+            ns.exec('/scripts/net-monitor.js', host, 1, '--start');
+        }
+        mon.refreshStatus(ns);
+        if (mon.status === 'RUNNING') {
+            ns.tail(mon.filename, mon.host, ...mon.args);
+        }
+        // Broadcast to the monitor app.
+        let display = args._.shift();
+        let cmd = new C2Command('net-mon', 'net', 'set', 'display', display, ns);
+        sendC2message(cmd, ns);
+    }
+}
 
 /**
  * Print out something about the system status.
@@ -197,11 +228,54 @@ async function runStatusCommand(host, args, ns) {
     ns.tprint(`Getting system status: `);
     // Check each subsystem.
     for (const system of subsystems) {
-        let money = ns.nFormat(system.scriptInfo.onlineMoneyMade, "$0.00a");
+        let money = ns.nFormat(system.scriptInfo.onlineMoneyMade, '$0.00a');
         let duration = ns.tFormat(system.scriptInfo.onlineRunningTime * 1000);
         ns.tprint(`... ${system.name}: ${system.status}.`);
-        ns.tprint(`...    ${money}; Running ${duration}`)
+        ns.tprint(`...    ${money}; Running ${duration}`);
     }
     ns.tprint(``);
     // Some summary info, too
+}
+
+/**
+ * Send a C2 message. If the queue is full, drops whatever falls off.
+ * @param {C2Command} msg
+ * @param {import("/scripts/index.js").NS} ns
+ */
+export function sendC2message(msg, ns) {
+    ns.writePort(c2_port, msg);
+}
+
+/**
+ * Empty the C2 queue, looking for our messages. Then put
+ * all the messages back on the queue, unless they're more
+ * than 90 seconds old. Throw away the old ones.
+ *
+ * @param {string} system - Get messages addressed to this system
+ * @param {import("/scripts/index.js").NS} ns
+ * @returns {C2Message[]}
+ */
+export function readC2messages(system, ns) {
+    let allmsgs = [];
+    let inbox = [];
+    // Get everything from the queue
+    /** @type {C2Message} */
+    let msg = ns.readPort(c2_port);
+    while (msg !== 'NULL PORT DATA') {
+        allmsgs.push(msg);
+        msg = ns.readPort(2);
+    }
+    // Figure out which messages we shouyld keep
+    while (allmsgs.length > 0) {
+        msg = allmsgs.pop();
+        if (msg.type === 'C2Message' && msg.to === system) {
+            inbox.push(msg);
+        } else {
+            let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
+            if (msg.createtime < expiryTime) {
+                sendC2message(msg, ns);
+            }
+        }
+    }
+    return inbox;
 }
