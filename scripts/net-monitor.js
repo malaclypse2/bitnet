@@ -7,7 +7,7 @@ import {
     print1Up,
     print2Up,
     print3Up,
-} from './bit-lib.js';
+} from '/scripts/bit-lib.js';
 import { readC2messages } from '/scripts/net.js';
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];

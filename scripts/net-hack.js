@@ -1,5 +1,5 @@
-import { getPlayerInfo, getAllServerInfo, root } from './bit-lib.js';
-import { Server, C2Command, C2Response } from "./bit-types";
+import { getPlayerInfo, getAllServerInfo, root } from '/scripts/bit-lib.js';
+import { Server, C2Command, C2Response } from "/scripts/bit-types";
 import { readC2messages } from '/scripts/net.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money

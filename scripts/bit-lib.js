@@ -1,4 +1,4 @@
-import { Server } from "./bit-types";
+import { Server } from "/scripts/bit-types.js";
 
 export const worker_size = 2.0; // in GB
 

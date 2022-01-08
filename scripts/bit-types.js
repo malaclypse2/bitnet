@@ -1,4 +1,4 @@
-import { worker_size } from './bit-lib';
+import { worker_size } from '/scripts/bit-lib.js';
 
 /**
  * @export
