@@ -1,4 +1,4 @@
-import { Server } from "/scripts/classes/Server.js";
+import { Server } from '/scripts/classes/Server.js';
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
@@ -101,7 +101,7 @@ export function printfServer(server, ns) {
     let lines = new Array(5);
 
     let servername = pad(Array(20).join('─'), `┤${server.name}├`);
-    lines[0] = `╭─${servername       }─╮`;
+    lines[0] = `╭─${servername}─╮`;
     lines[1] = `| 000 Gb               │`;
     lines[2] = `|                      │`;
     lines[3] = `|                      │`;
@@ -188,45 +188,65 @@ export function stopscript(servers, script, ns) {
     }
 }
 
-export function print3Up(displayData, ns) {
-    // Two-Column. Assumes everything is pretty uniform. And pretty narrow.
-    let n = 3;
-    while (displayData.length >= n) {
-        let columns = Array(n).map(() => displayData.pop());
-        for (let rowNum = 0; rowNum < columns[0].length; rowNum++) {
-            let line = '';
-            for (let colNum = 0; colNum < columns.length; colNum++) {
-                if (colNum > 0) line += '  ';
-                line += columns[colNum];
-            }
-            ns.print(line);
-        }
+/**
+ *
+ * @param {*[]} items
+ * @param {number} n
+ * @returns {*[][]}
+ */
+function splitNWays(items, n) {
+    let columns = [];
+    n = Math.min(n, items.length);
+    // split into n columns
+    let splitpoint = Math.ceil(items.length / n);
+    for (let i = 0; i < n; i++) {
+        let from = i * splitpoint;
+        let to = (i + 1) * splitpoint;
+        columns.push(items.slice(from, to));
     }
-    if (displayData.length > 0) {
-        print2Up(displayData, ns);
+    return columns;
+}
+
+/**
+ *  Print an Array of items, where each item is an Array of strings. Typically each item is a narrow multiline status report about a server.
+ * @param {string[][]} items - A list of items to print.
+ * @param {number} n - number of columns to print in
+ * @param {Function} printfn - what print function to use. Typically ns.print or ns.tprint.
+ */
+export function printItemsNColumns(items, n, printfn) {
+    /** @type{string[][][]} */
+    let columns = splitNWays(items, n);
+
+    // Now columns[0] is is a list of items to print in column 0, etc.
+    // Since we want to print by rows, let's transpose the array
+    let rows = columns[0].map((_, colIndex) => columns.map((row) => row[colIndex]));
+    for (const row of rows) {
+        // row is now an Array of n items, with each item being an Array of strings to print.
+        for (let i = 0; i < row[0].length; i++) {
+            let line = row.map((item) => {
+                if (item && item.length > i) return item[i];
+                else return '';
+            });
+            // line is now an Array of strings, which just need to be joined and printed.
+            printfn(line.join('   '));
+        }
     }
 }
 
-export function print2Up(displayData, ns) {
-    // Two-Column. Assumes everything is pretty uniform.
-    while (displayData.length >= 2) {
-        let col1Lines = displayData.pop();
-        let col2Lines = displayData.pop();
-        for (let i = 0; i < col1Lines.length; i++) {
-            let col1 = col1Lines[i];
-            let col2 = col2Lines[i];
-            ns.print(col1 + '   ' + col2);
-        }
-    }
-    if (displayData.length > 0) {
-        print1Up(displayData, ns);
-    }
-}
+/**
+ *  Print an Array of strings in N columns.
+ * @param {string[]} lines - An array of items to print.
+ * @param {number} n - number of columns to print in
+ * @param {Function} printfn - what print function to use. Typically ns.print or ns.tprint.
+ */
+export function printLinesNColumns(lines, n, printfn) {
+    let columns = splitNWays(lines, n);
 
-export function print1Up(displayData, ns) {
-    for (const data of displayData) {
-        for (const line of data) {
-            ns.print(line);
-        }
+    // Now columns[0] is an array of the lines to print in column[0], etc.
+    // Since we want to print by rows, let's transpose the array
+    let rows = columns[0].map((_, colIndex) => columns.map((row) => row[colIndex]));
+    for (const row of rows) {
+        // row is now an array of strings to prints in this row
+        printfn(row.join('   '));
     }
 }

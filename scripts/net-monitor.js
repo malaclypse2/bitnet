@@ -4,9 +4,7 @@ import {
     getAllServerInfo,
     printfSeverAsTarget,
     printfServer,
-    print1Up,
-    print2Up,
-    print3Up,
+    printItemsNColumns,
 } from '/scripts/bit-lib.js';
 import { readC2messages } from '/scripts/net.js';
 import { C2Command } from '/scripts/classes/C2Message.js';
@@ -98,7 +96,7 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
                             i = ++i % displayTypes.length;
                             displayType = displayTypes[i];
                         } else {
-                            let newDisplayType = displayTypes.find((t) => t.toLower() === msg.value.toLower());
+                            let newDisplayType = displayTypes.find((t) => t.toLowerCase() === msg.value.toLowerCase());
                             if (newDisplayType) displayType = newDisplayType;
                         }
                     }
@@ -168,19 +166,19 @@ export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) 
         for (const servername in servers) {
             let server = servers[servername];
             let lines = printfServer(server, ns);
-            displayData.push(lines);
+            displayData.push(...lines);
         }
     }
 
     // Printing.  Kind of hacky use of the logtype. Should probably fix it.
     if (logType.endsWith('3Up')) {
-        print3Up(displayData, ns);
+        printItemsNColumns(displayData, 3, ns.print);
     }
     if (logType.endsWith('2Up')) {
-        print2Up(displayData, ns);
+        printItemsNColumns(displayData, 2, ns.print);
     }
     if (logType.endsWith('1Up')) {
-        print1Up(displayData, ns);
+        printItemsNColumns(displayData, 1, ns.print);
     }
 
     if (logType === 'Short') {

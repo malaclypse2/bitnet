@@ -1,38 +1,54 @@
-import { pad, print2Up, print1Up } from '/scripts/bit-lib.js';
-import { Server } from "/scripts/classes/Server";
+import { pad, printItemsNColumns, printLinesNColumns } from '/scripts/bit-lib.js';
+import { Server } from '/scripts/classes/Server';
 
-/** @param {import(".").NS} ns */
+let names = [
+    'Alpha (α)',
+    'Beta (β)',
+    'Gamma (γ)',
+    'Delta (Δ)',
+    'Epsilon (ε)',
+    'Zeta (ζ)',
+    'Eta (η)',
+    'Theta (θ)',
+    'Iota (ι)',
+    'Kappa (κ)',
+    'Lambda (λ)',
+    'Mu (μ)',
+    'Nu (ν)',
+    'Xi (ξ)',
+    'Omicron (ο)',
+    'Pi (π)',
+    'Rho (ρ)',
+    'Sigma (σ)',
+    'Tau (τ)',
+    'Upsilon (υ)',
+    'Phi (φ)',
+    'Chi (χ)',
+    'Psi (Ψ)',
+    'Omega (Ω)',
+    'Aleph (א)',
+];
+
+/** @param {import('/scripts/index.js').NS} ns */
 export async function main(ns) {
-    ns.disableLog('ALL');
-    ns.tail();
     let servers = ns.getPurchasedServers();
     var moneyAvailable = ns.getServerMoneyAvailable('home');
-    var maxRam = ns.getPurchasedServerMaxRam();
 
     // Do something with arguments
     let args = ns.flags([
+        ['list', false],
+        ['prices', false],
         ['buy', 0],
         ['delete', 0],
-        ['name', 'slave'],
+        ['name', ''],
         ['num', 1],
     ]);
+    if (args.name === '') {
+        // Find a name we aren't using yet.
+        args.name = names.find((n) => !servers.includes((s) => s !== n));
+    }
     if (args.delete != 0) {
-        if (args.delete == 999) {
-            for (const servername of servers) {
-                let deleted = ns.deleteServer(servername);
-                if (!deleted) ns.print('ERROR: Failed to delete server ' + servername);
-            }
-        } else {
-            if (typeof args.delete == 'number' && args.delete > 0 && args.delete <= servers.length) {
-                let servername = servers[args.delete - 1];
-                let deleted = ns.deleteServer(servername);
-                if (!deleted) ns.print('ERROR: Failed to delete server ' + servername);
-            } else {
-                let deleted = ns.deleteServer(args.delete);
-                if (!deleted) ns.print('ERROR: Failed to delete server ' + args.delete);
-            }
-        }
-        servers = ns.getPurchasedServers();
+        servers = deleteServers(args, servers, ns);
     }
     if (args.buy != 0) {
         for (let i = 0; i < args.num; i++) {
@@ -40,35 +56,63 @@ export async function main(ns) {
         }
         servers = ns.getPurchasedServers();
     }
+    if (args.list) {
+        ns.tprint(`Current servers [${servers.length}/${ns.getPurchasedServerLimit()}]: `);
+        let i = 1;
+        let lines = [];
+        for (const servername of servers) {
+            let server = new Server(servername, ns);
+            
+            let servernm = pad('            ', servername, true);
+            let ram = ns.nFormat(server.ram * Math.pow(2, 30), '0 b');
+            ram = pad('      ', ram);
+            let cost = pad('         ', ns.nFormat(ns.getPurchasedServerCost(server.ram), '$0.00a'));
+            let n = ' ' + pad('  ', i, true) + '.';
 
-    ns.print(`Current servers [${servers.length}/${ns.getPurchasedServerLimit()}]: `);
-    let i = 1;
-    let lines = [];
-    for (const servername of servers) {
-        let server = new Server(servername, ns);
-        let serverStr = pad('        ', servername, true);
-        let ram = ns.nFormat(server.ram * Math.pow(2, 30), '0 b');
-        ram = pad('      ', ram);
-        let cost = pad('         ', ns.nFormat(ns.getPurchasedServerCost(server.ram), '$0.00a'));
-        lines.push(` ${pad('  ', i, true)}. ${serverStr} ( ${ram}) - ${cost}`);
-        i++;
+            let line = `${n} ${servernm} (${ram}) - ${cost}`;
+            lines.push(line);
+            i++;
+        }
+        for (const line of lines) {
+            ns.tprint(line);
+        }
+        if (lines.length === 0) {
+            ns.tprint('No purchased servers.')
+        }
+        ns.tprint('')
     }
-    let half = Math.ceil(lines.length / 2);
-    print2Up([lines.slice(half), lines.slice(0, half)], ns);
 
-    if (args.buy == 0 && args.delete == 0) {
-        lines = [];
-        ns.print('');
-        ns.print('Available Money ' + ns.nFormat(moneyAvailable, '$0.00a'));
-        ns.print(`Server Costs: `);
-        ns.print(`   #      RAM  Price`);
+    if (args.prices) {
+        let lines = [];
+        ns.tprint('');
+        ns.tprint('Available Money ' + ns.nFormat(moneyAvailable, '$0.00a'));
+        ns.tprint(`Server Costs: `);
+        ns.tprint(`   #      RAM  Price`);
         for (let i = 1; i <= 20; i++) {
             let ram = Math.pow(2, i);
             let cost = ns.nFormat(ns.getPurchasedServerCost(ram), '$0.00a');
             ram = ns.nFormat(ram * Math.pow(2, 30), '0 b');
             lines.push(`  ${pad('  ', i, true)}.  ${pad('      ', ram, true)}  ${pad('        ', cost)}`);
         }
-        half = Math.ceil(lines.length / 2);
-        print2Up([lines.slice(half), lines.slice(0, half)], ns);
+        printLinesNColumns(lines, 2, ns.tprint);
     }
+}
+function deleteServers(args, servers, ns) {
+    if (args.delete == 999) {
+        for (const servername of servers) {
+            let deleted = ns.deleteServer(servername);
+            if (!deleted) ns.tprint('ERROR: Failed to delete server ' + servername);
+        }
+    } else {
+        if (typeof args.delete == 'number' && args.delete > 0 && args.delete <= servers.length) {
+            let servername = servers[args.delete - 1];
+            let deleted = ns.deleteServer(servername);
+            if (!deleted) ns.tprint('ERROR: Failed to delete server ' + servername);
+        } else {
+            let deleted = ns.deleteServer(args.delete);
+            if (!deleted) ns.tprint('ERROR: Failed to delete server ' + args.delete);
+        }
+    }
+    servers = ns.getPurchasedServers();
+    return servers;
 }

@@ -16,15 +16,15 @@
  * net start
  * net stop
  * net status
- *
- * (TODO)
  * net hack add target
  * net hack drop target
  * net monitor short
  * net monitor Targets2Up
- * net buy server
- * net buy hacknet
- * net upgrade servers
+ * (TODO)
+ * net servers list
+ * net servers buy
+ * net servers upgrade
+ * net hacknet buy
  * net backdoor
  *
  */
@@ -93,6 +93,7 @@ export async function main(ns) {
         status: runStatusCommand,
         hack: runHackCommand,
         monitor: runMonitorCommand,
+        servers: runServersCommand,
     };
     // command aliases
     if (args._.length > 0) {
@@ -188,38 +189,35 @@ async function runRestartCommand(host, args, ns) {
  * @param {import(".").NS} ns
  */
 async function runHackCommand(host, args, ns) {
-        if (args.help) {
-            let msg =`
+    if (args.help) {
+        let msg = `
             net-hack controls. 
             Examples: 
             net hack add target n00dles
             net hack drop target n00dles
             `;
-            ns.tprint(msg);
-        } else if (args._.length > 0) {
-            let cmd = args._.pop()
-            // Handle the command.
-            if (cmd === 'add' && args._.length >= 2) {
-                // 'net hack add' (probably net hack add target <someserver>?)
-                let key = args._.pop();
-                let value = args._.pop() 
-                let msg = new C2Command ('net-hack', 'net', 'add', key, value, ns);
-                await sendC2message(msg, ns);
-            }
-            if (cmd === 'drop' && args._.length >= 2) {
-                // 'net hack add' (probably net hack add target <someserver>?)
-                let key = args._.pop();
-                let value = args._.pop();
-                let msg = new C2Command('net-hack', 'net', 'drop', key, value, ns);
-                await sendC2message(msg, ns);
-            } else {
-                let msg = `I don't know how to handle the command '${cmd}' with additional options (${args._.join(
-                    ','
-                )}) `;
-                ns.tprint(msg);
-            }
+        ns.tprint(msg);
+    } else if (args._.length > 0) {
+        let cmd = args._.shift();
+        // Handle the command.
+        if (cmd === 'add' && args._.length >= 2) {
+            // 'net hack add' (probably net hack add target <someserver>?)
+            let key = args._.shift();
+            let value = args._.shift();
+            let msg = new C2Command('net-hack', 'net', 'add', key, value, ns);
+            await sendC2message(msg, ns);
         }
-
+        if (cmd === 'drop' && args._.length >= 2) {
+            // 'net hack add' (probably net hack add target <someserver>?)
+            let key = args._.shift();
+            let value = args._.shift();
+            let msg = new C2Command('net-hack', 'net', 'drop', key, value, ns);
+            await sendC2message(msg, ns);
+        } else {
+            let msg = `I don't know how to handle the command '${cmd}' with additional options (${args._.join(',')}) `;
+            ns.tprint(msg);
+        }
+    }
 }
 
 /**
@@ -252,6 +250,55 @@ async function runMonitorCommand(host, args, ns) {
 }
 
 /**
+ * Do something with the monitoring subsystem
+ *
+ * @param {string} host - the host to run against
+ * @param {*} args - flags passed in from the command line.
+ * @param {import('/scripts/index.js').NS} ns
+ */
+async function runServersCommand(host, args, ns) {
+    const script_server = '/scripts/buyServers.js';
+    ns.tprint(`Running server commands: '${args._}'`);
+    if (args.help) {
+        let msg = `
+        server commands. 
+        net server list -  list current purchased servers
+        net server prices - show price list
+        net server buy [num] size - Buy num servers at a particular size. Default 1
+        net server delete server# - delete a server
+        net server upgrade [server#] size - upgrade existing purchased server to size`;
+        ns.tprint(msg);
+    } else if (args._.length > 0) {
+        let action = args._.shift();
+        if (action === 'list') {
+            ns.exec(script_server, host, 1, '--list');
+        }
+        if (action == 'prices') {
+            ns.exec(script_server, host, 1, '--prices');
+        }
+        if (action == 'buy') {
+            // There should be one or two more items on the command line.
+            // If it's just one, then that's the size. If there's two it should be number then size
+            if (args._.length > 0 && args._.length <= 2) {
+                let siz = args._.pop();
+                let num = args._.pop();
+                num = num ?? 1;
+                ns.exec(script_server, host, 1, '--buy', siz, '--num', num, '--list');
+            } else {
+                let msg = `Unknown arguments to net server buy: '${args._.join(
+                    ' '
+                )}' expected net server buy [num] siz`;
+                ns.tprint(msg);
+            }
+        }
+        if (action === 'delete') {
+            let num = args._.shift();
+            ns.exec(script_server, host, 1, '--delete', num);
+        }
+    }
+}
+
+/**
  * Print out something about the system status.
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
@@ -278,7 +325,7 @@ async function runStatusCommand(host, args, ns) {
 export async function sendC2message(msg, ns) {
     let s = JSON.stringify(msg);
     await ns.writePort(c2_port, s);
-    ns.tprint(`C2 Message sent: ${s}`)
+    ns.tprint(`C2 Message sent: ${s}`);
 }
 
 /**
@@ -307,7 +354,6 @@ export async function readC2messages(system, ns) {
         if (msg.type === 'C2Message' && msg.to === system) {
             inbox.push(msg);
             ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
-
         } else {
             let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
             if (msg.createtime > expiryTime) {
