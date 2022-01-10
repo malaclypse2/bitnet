@@ -95,17 +95,25 @@ export function printfSeverAsTarget(server, ns) {
     return [line1, line2, line3];
 }
 
+// prettier-ignore
 export function printfServer(server, ns) {
     // Maybe try a narrower but higher format this time, just for visual distinction.
     // length 24?
     let lines = new Array(5);
 
-    let servername = pad(Array(20).join('─'), `┤${server.name}├`);
-    lines[0] = `╭─${servername}─╮`;
-    lines[1] = `| 000 Gb               │`;
-    lines[2] = `|                      │`;
-    lines[3] = `|                      │`;
-    lines[4] = `╰                     ╯`;
+    let servername = pad(Array(20+1).join('─'), `┤${server.name}├`);
+
+    // linedrawingchars = '─ │ ┌ ┐ └ ┘ ├ ┬ ┤ ┴ ';
+    lines[0] = `┌─${servername       }─┐`;
+    lines[1] = `│                      │`;
+    lines[2] = `│                      │`;
+    lines[3] = `│                      │`;
+    lines[4] = `└──────────────────────┘`;
+    // lines[0] = `╭───╮`;
+    // lines[1] = `|   │`;
+    // lines[2] = `|   │`;
+    // lines[3] = `|   │`;
+    // lines[4] = `╰───╯`;
     ns.nFormat('');
     return lines;
 }

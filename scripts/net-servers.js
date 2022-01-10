@@ -40,26 +40,23 @@ export async function main(ns) {
         ['prices', false],
         ['buy', 0],
         ['delete', 0],
-        ['name', ''],
         ['num', 1],
     ]);
-    if (args.name === '') {
-        // Find a name we aren't using yet.
-        args.name = names.find((n) => !servers.includes((s) => s !== n));
-    }
     if (args.delete != 0) {
         servers = deleteServers(args, servers, ns);
     }
     if (args.buy != 0) {
         for (let i = 0; i < args.num; i++) {
-            ns.purchaseServer(args.name, Math.pow(2, args.buy));
+            let name = names[servers.length % names.length];
+            ns.purchaseServer(name, Math.pow(2, args.buy));
         }
         servers = ns.getPurchasedServers();
     }
     if (args.list) {
         ns.tprint(`Current servers [${servers.length}/${ns.getPurchasedServerLimit()}]: `);
-        let i = 1;
+        let i = 0;
         let lines = [];
+        servers.unshift('home');
         for (const servername of servers) {
             let server = new Server(servername, ns);
             

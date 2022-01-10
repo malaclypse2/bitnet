@@ -69,8 +69,16 @@ export class SubSystem {
 }
 
 export const subsystems = [
-    new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
+    //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
+    new SubSystem('daemon', '/daemon.js', 'home'),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home'),
+    new SubSystem('stats', '/stats.js', 'home'),
+    new SubSystem('hacknet-upgrade-manager', '/hacknet-upgrade-manager.js', 'home'),
+    new SubSystem('stockmaster', '/stockmaster.js', 'home'),
+    new SubSystem('gangs', '/gangs.js', 'home'),
+    new SubSystem('spend-hacknet-hashes', '/spend-hacknet-hashes.js', 'home'),
+    new SubSystem('sleeve', '/spend-hacknet-hashes.js', 'home'),
+    new SubSystem('work-for-factions', '/work-for-factions.js', 'home'),
 ];
 
 /**
@@ -87,13 +95,14 @@ export async function main(ns) {
     }
 
     let handlers = {
-        start: runStartCommand,
-        stop: runStopCommand,
-        restart: runRestartCommand,
+//        start: runStartCommand,
+//        stop: runStopCommand,
+//        restart: runRestartCommand,
         status: runStatusCommand,
         hack: runHackCommand,
         monitor: runMonitorCommand,
         servers: runServersCommand,
+        backdoor: runBackdoorCommand,
     };
     // command aliases
     if (args._.length > 0) {
@@ -257,7 +266,7 @@ async function runMonitorCommand(host, args, ns) {
  * @param {import('/scripts/index.js').NS} ns
  */
 async function runServersCommand(host, args, ns) {
-    const script_server = '/scripts/buyServers.js';
+    const script_server = '/scripts/net-servers.js';
     ns.tprint(`Running server commands: '${args._}'`);
     if (args.help) {
         let msg = `
@@ -315,6 +324,17 @@ async function runStatusCommand(host, args, ns) {
     }
     ns.tprint(``);
     // Some summary info, too
+}
+
+/**
+ * Try to backdoor all the things.
+ * @param {string} host - the host to run against
+ * @param {*} args - flags passed in from the command line.
+ * @param {import("/scripts/index.js").NS} ns
+ */
+async function runBackdoorCommand(host, args, ns) {
+    ns.tprint(`Backdooring all systems. `);
+    ns.exec('/scripts/net-backdoor', host, 1);
 }
 
 /**

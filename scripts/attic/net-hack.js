@@ -344,17 +344,17 @@ export function getAttackStatus(servers, targets, ns) {
         let procs = ns.ps(server.name);
         while (procs.length > 0) {
             const proc = procs.pop();
-            if (proc.filename.includes('weakenOnce.js')) {
+            if (proc.filename.includes('/weak')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
                 if (target) target.running.weaken += proc.threads;
                 server.w += proc.threads;
             }
-            if (proc.filename.includes('growOnce.js')) {
+            if (proc.filename.includes('/grow')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
                 if (target) target.running.grow += proc.threads;
                 server.g += proc.threads;
             }
-            if (proc.filename.includes('hackOnce.js')) {
+            if (proc.filename.includes('/hack')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
                 if (target) target.running.hack += proc.threads;
                 server.h += proc.threads;

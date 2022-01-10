@@ -74,7 +74,7 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
     let processesToMonitor = [];
 
     ns.tail();
-    let lastlog = `Hmm`;
+    let lastlog = ``;
 
     let on10 = 0,
         on50 = 0,
@@ -85,10 +85,8 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
         on50 = ++on50 % 50;
         on100 = ++on100 % 100;
         if (on10 == 1) {
-            lastlog = 'Checking mailbox...'
             let inbox = await readC2messages('net-monitor', ns);
             for (const msg of inbox) {
-                lastlog = (`handlling C2 message: ${JSON.stringify(msg)}`)
                 if (msg.subtype === 'C2Command' && msg.action === 'set') {
                     if (msg.key === 'display') {
                         if (msg.value === 'next') {
@@ -134,6 +132,12 @@ function findInterestingProcesses(ns) {
                 procInfo.hostname = hostname;
                 interestingProcs.push(procInfo);
             }
+        } else if (procInfo.filename.includes('daemon.js')) {
+            let proc = ns.getRunningScript(procInfo.filename, hostname, ...procInfo.args);
+            if (proc && proc.onlineMoneyMade > 0) {
+                procInfo.hostname = hostname;
+                interestingProcs.push(procInfo);
+            }
         }
     }
     return interestingProcs;
@@ -166,7 +170,7 @@ export function printFancyLog(servers, targets, controlScriptInfo, logType, ns) 
         for (const servername in servers) {
             let server = servers[servername];
             let lines = printfServer(server, ns);
-            displayData.push(...lines);
+            displayData.push(lines);
         }
     }
 
