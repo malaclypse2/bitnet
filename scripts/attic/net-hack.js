@@ -1,7 +1,5 @@
-import { getPlayerInfo, getAllServerObjects, root } from '/scripts/bit-lib.js';
-import { C2Command, C2Response } from '/scripts/classes/C2Message.js';
-import { Server } from '/scripts/classes/Server.js';
-import { readC2messages, sendC2message } from '/scripts/net.js';
+import { getPlayerInfo, getAllServerObjects, root, getPoolFromServers, Server } from '/scripts/bit-lib.js';
+import { readC2messages, sendC2message, C2Command, C2Response } from '/scripts/bit-lib.js';
 
 let hackThreshold = 0.5; // Don't start hacking unless a server has this percentage of max money
 let hackFactor = 0.2; // Try to hack this percentage of money at a time
@@ -183,7 +181,6 @@ function addTargets(playerInfo, numTargets, ns) {
     }
 }
 
-
 /**
  * Find servers with free capacity, and allocate them to targets with open attack requests.
  * Updates all server and target information.
@@ -263,7 +260,11 @@ function allocateSwarmThreads(servers, targets, player, ns) {
     let attackScripts = { hack: script_hack, grow: script_grow, weaken: script_weaken };
     for (const target of targets) {
         target.desired = { hack: target.desired.hack, grow: target.desired.grow, weaken: target.desired.weaken };
-        target.targetedBy = { hack: target.targetedBy.hack, grow: target.targetedBy.grow, weaken: target.targetedBy.weaken };
+        target.targetedBy = {
+            hack: target.targetedBy.hack,
+            grow: target.targetedBy.grow,
+            weaken: target.targetedBy.weaken,
+        };
     }
     // Exec all the attack threads on servers
     for (const servername in servers) {

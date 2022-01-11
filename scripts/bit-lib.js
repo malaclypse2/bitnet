@@ -1,8 +1,8 @@
 /**@typedef{import('/scripts/index.js').NS} NS */
 
 // --- EXPORTED CONSTANTS ---
-const worker_size = 1.75;
-
+export const worker_size = 1.75;
+export const c2_port = 2;
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -19,7 +19,6 @@ export async function main(ns) {
     let servers = getAllServerObjects({}, ns);
     ns.tprint(JSON.stringify(servers));
 }
-
 
 // --- UTILITY FUNCTIONS ---
 /**
@@ -87,12 +86,12 @@ export function printfSeverAsTarget(server, ns) {
     const growStr = pad(Array(17).join('─'), `┤Grow ${growsRunning}├`);
     const weakenStr = pad(Array(18).join('─'), `┤Weaken ${weakensRunning}`, true);
 
-    let line1 = `┌─┤`;
+    let line1 = `┌┤`;
     line1 += pad(Array(17).join('─'), server.name + '├');
     line1 += pad(Array(17).join('─'), '┤ ' + moneyStr, true) + ' ├─';
-    line1 += '┤' + secStr + `├─┐`;
+    line1 += '┤' + secStr + `├┐`;
 
-    let line2 = `└─┤${hackStr}${growStr}${weakenStr}├─┘`;
+    let line2 = `└┤${hackStr}${growStr}${weakenStr}├┘`;
     let line3 = '';
 
     return [line1, line2, line3];
@@ -108,20 +107,24 @@ export function printfSeverAsTarget(server, ns) {
  * @param {boolean} left - add the left line?
  * @param {boolean} right - add the right line?
  * @returns {string[]}
- * 
+ *
  */
-export function boxdraw(lines, title='', width=0, top=true, bottom=true, left=true, right = true) {
+export function boxdraw(lines, title='', width=0, wrap=false, titleright= false, top=true, bottom=true, left=true, right = true) {
     // linedrawingchars = '─ │ ┌ ┐ └ ┘ ├ ┬ ┤ ┴ ';
     let maxlen = width;
     if (width==0) {
         maxlen = Math.max(...lines.map((l) => l.length) );
     } 
-    if (title !== '') title = pad(Array(maxlen+3).join('─'), '┤'+title+'├');
+    if (title !== '') title = pad(Array(maxlen+3).join('─'), '┤'+title+'├', titleright);
     else title = Array(maxlen+3).join('─'); 
     let bline = Array(maxlen+3).join('─');
 
     let topline = `┌${title}┐`;
     let bottomline = `└${bline}┘`
+    // wrap if we need to
+    if (wrap) {
+        lines = lines.map((l)=>wrap(l, maxlen)).flat();
+    }
     // pad out the lines to the right width
     lines = lines.map((line) => pad(Array(maxlen+1).join(' '), line));
     if (left) lines = lines.map((line) => '│ ' + line)
@@ -132,14 +135,14 @@ export function boxdraw(lines, title='', width=0, top=true, bottom=true, left=tr
     return lines;
 }
 
-export function percentToGraph(pct, graph='     '){
+export function percentToGraph(pct, graph = '     ') {
     const progressSteps = '▏▎▍▌▋▊▉█';
     let progressbar = Array.from(graph);
     let filled = Math.floor(pct * progressbar.length);
     for (let i = 0; i <= filled; i++) {
         progressbar[i] = progressSteps[progressSteps.length - 1];
     }
-    let pctleft = (pct * progressbar.length) - filled;
+    let pctleft = pct * progressbar.length - filled;
     let whichbar = Math.floor(pctleft * progressSteps.length);
     progressbar[filled] = progressSteps[whichbar];
     progressbar = progressbar.join('');
@@ -401,16 +404,37 @@ export class C2Response extends C2Message {
     }
 }
 
-
 /**
  * @export
  * @class Server
  */
 const PurchasedServerNames = [
-'Alpha(α)','Beta(β)','Gamma(γ)','Delta(Δ)','Epsilon(ε)','Zeta(ζ)','Eta(η)',
-'Theta(θ)','Iota(ι)','Kappa(κ)','Lambda(λ)','Mu(μ)','Nu(ν)','Xi(ξ)','Omicron(ο)',
-'Pi(π)','Rho(ρ)','Sigma(σ)','Tau(τ)','Upsilon(υ)','Phi(φ)','Chi(χ)','Psi(Ψ)',
-'Omega(Ω)','Aleph(א)','daemon',
+    'Alpha(α)',
+    'Beta(β)',
+    'Gamma(γ)',
+    'Delta(Δ)',
+    'Epsilon(ε)',
+    'Zeta(ζ)',
+    'Eta(η)',
+    'Theta(θ)',
+    'Iota(ι)',
+    'Kappa(κ)',
+    'Lambda(λ)',
+    'Mu(μ)',
+    'Nu(ν)',
+    'Xi(ξ)',
+    'Omicron(ο)',
+    'Pi(π)',
+    'Rho(ρ)',
+    'Sigma(σ)',
+    'Tau(τ)',
+    'Upsilon(υ)',
+    'Phi(φ)',
+    'Chi(χ)',
+    'Psi(Ψ)',
+    'Omega(Ω)',
+    'Infinity(∞)',
+    'daemon',
 ];
 
 export class Server {
@@ -434,10 +458,10 @@ export class Server {
         }
         this.symbol = this.name[0];
 
-        let left=this.name.indexOf('(');
-        let right=this.name.lastIndexOf(')');
+        let left = this.name.indexOf('(');
+        let right = this.name.lastIndexOf(')');
         if (left !== -1 && right !== -1) {
-            this.symbol = this.name.substring(left+1, right)
+            this.symbol = this.name.substring(left + 1, right);
         }
     }
     update(ns) {
@@ -496,4 +520,125 @@ export class SubSystem {
             }
         }
     } // end refreshStatus()
+}
+
+/**
+ * Wrap a string, returning an array of strings, wrapped to the specified length..
+ * @param {string} long_string
+ * @param {number} max_char
+ * @returns {string[]}
+ */
+export function wordwrap(long_string, max_char) {
+    var sum_length_of_words = function (word_array) {
+        var out = 0;
+        if (word_array.length != 0) {
+            for (var i = 0; i < word_array.length; i++) {
+                var word = word_array[i];
+                out = out + word.length;
+            }
+        }
+        return out;
+    };
+
+    var chunkString = function (str, length) {
+        return str.match(new RegExp('.{1,' + length + '}', 'g'));
+    };
+
+    var splitLongWord = function (word, maxChar) {
+        var out = [];
+        if (maxChar >= 1) {
+            var wordArray = chunkString(word, maxChar - 1); // just one under maxChar in order to add the innerword separator '-'
+            if (wordArray.length >= 1) {
+                // Add every piece of word but the last, concatenated with '-' at the end
+                for (var i = 0; i < wordArray.length - 1; i++) {
+                    var piece = wordArray[i] + '-';
+                    out.push(piece);
+                }
+                // finally, add the last piece
+                out.push(wordArray[wordArray.length - 1]);
+            }
+        }
+        // If nothing done, just use the same word
+        if (out.length == 0) {
+            out.push(word);
+        }
+        return out;
+    };
+
+    var split_out = [[]];
+    var split_string = long_string.split(' ');
+    for (var i = 0; i < split_string.length; i++) {
+        var word = split_string[i];
+
+        // If the word itself exceed the max length, split it,
+        if (word.length > max_char) {
+            var wordPieces = splitLongWord(word, max_char);
+            for (var i = 0; i < wordPieces.length; i++) {
+                var wordPiece = wordPieces[i];
+                split_out = split_out.concat([[]]);
+                split_out[split_out.length - 1] = split_out[split_out.length - 1].concat(wordPiece);
+            }
+        } else {
+            // otherwise add it if possible
+            if (sum_length_of_words(split_out[split_out.length - 1]) + word.length > max_char) {
+                split_out = split_out.concat([[]]);
+            }
+
+            split_out[split_out.length - 1] = split_out[split_out.length - 1].concat(word);
+        }
+    }
+
+    for (var i = 0; i < split_out.length; i++) {
+        split_out[i] = split_out[i].join(' ');
+    }
+
+    return split_out;
+}
+
+/**
+ * Empty the C2 queue, looking for our messages. Then put
+ * all the messages back on the queue, unless they're more
+ * than 90 seconds old. Throw away the old ones.
+ *
+ * @param {string} system - Get messages addressed to this system
+ * @param {import("/scripts/index.js").NS} ns
+ * @returns {C2Message[]}
+ */
+
+export async function readC2messages(system, ns) {
+    let allmsgs = [];
+    let inbox = [];
+    // Get everything from the queue
+    /** @type {C2Message} */
+    let msg = ns.readPort(c2_port);
+    while (msg !== 'NULL PORT DATA') {
+        allmsgs.push(msg);
+        msg = ns.readPort(2);
+    }
+    // Figure out which messages we should keep
+    while (allmsgs.length > 0) {
+        msg = allmsgs.pop();
+        msg = JSON.parse(msg);
+        if (msg.type === 'C2Message' && msg.to === system) {
+            inbox.push(msg);
+            // ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
+        } else {
+            let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
+            if (msg.createtime > expiryTime) {
+                await sendC2message(msg, ns);
+            }
+        }
+    }
+    return inbox;
+}
+
+/**
+ * Send a C2 message. If the queue is full, drops whatever falls off.
+ * @param {C2Command} msg
+ * @param {import("/scripts/index.js").NS} ns
+ */
+ export async function sendC2message(msg, ns) {
+    let s = JSON.stringify(msg);
+    await ns.writePort(c2_port, s);
+    // ns.tprint(`C2 Message sent: ${s}`);
 }

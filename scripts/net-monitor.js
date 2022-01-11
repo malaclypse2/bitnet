@@ -11,9 +11,9 @@ import {
     percentToGraph,
     C2Command,
     Server,
+    readC2messages,
     SubSystem,
 } from '/scripts/bit-lib.js';
-import { readC2messages } from "/scripts/readC2messages";
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 

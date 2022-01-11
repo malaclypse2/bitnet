@@ -9,5 +9,7 @@ module.exports = {
         "sourceType": "module"
     },
     "rules": {
+        "no-constant-condition": ["error", {"checkLoops": false}],
+        "no-unused-vars": ["warn", {"args": "none", "varsIgnorePattern": "^_"}],
     }
 };

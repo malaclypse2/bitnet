@@ -16,21 +16,18 @@
  * net start
  * net stop
  * net status
- * net hack add target
- * net hack drop target
  * net monitor short
  * net monitor Targets2Up
- * (TODO)
  * net servers list
  * net servers buy
+ * (TODO)
  * net servers upgrade
  * net hacknet buy
  * net backdoor
  *
  */
-const c2_port = 2;
-
-import { SubSystem, C2Command, C2Message } from '/scripts/bit-lib.js';
+/** @typedef{import('/scripts/index.js').NS} NS*/
+import { SubSystem, C2Command, C2Message, sendC2message } from '/scripts/bit-lib.js';
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
@@ -46,7 +43,7 @@ export const subsystems = [
 ];
 
 /**
- * @param {import(".").NS } ns
+ * @param {NS} ns
  */
 export async function main(ns) {
     // arg parsing
@@ -59,9 +56,9 @@ export async function main(ns) {
     }
 
     let handlers = {
-        //        start: runStartCommand,
-        //        stop: runStopCommand,
-        //        restart: runRestartCommand,
+        start: runStartCommand,
+        stop: runStopCommand,
+        restart: runRestartCommand,
         status: runStatusCommand,
         hack: runHackCommand,
         monitor: runMonitorCommand,
@@ -71,6 +68,7 @@ export async function main(ns) {
     // command aliases
     if (args._.length > 0) {
         if (args._[0] === 'mon') args._[0] = 'monitor';
+        if (args._[0] === 'server') args._[0] = 'servers';
     }
 
     // Process command line
@@ -89,6 +87,7 @@ export async function main(ns) {
             net stop - stop persistent servers
             net restart - stop then start persistent servers
             net monitor --help
+            net server --help
             `;
             ns.tprint(msg);
         }
@@ -104,23 +103,22 @@ export async function main(ns) {
  *
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
- * @param {import(".").NS} ns
+ * @param {NS} ns
  */
 async function runStartCommand(host, args, ns) {
-    ns.exec('/scripts/net-hack.js', host, 1, '--start');
-    if (host !== ns.getHostname()) {
-        ns.exec('/scripts/net-monitor.js', host, 1, '--start');
-    } else {
-        ns.spawn('/scripts/net-monitor.js', 1, '--start');
+    // This will bring a running monitor mindow to life, or start one if there isn't one.
+    await runMonitorCommand(host, args, ns);
+
+    // Start the daemon in stock mode if it's not running.
+    if(subsystems.find((s)=>s.name === 'daemon').status === 'STOPPED') {
+        ns.spawn('daemon.js', 1, '-s');
     }
+    
 }
 
 /**
  * Stop all persistent processes on this host
  * .
- * All of our long running stuff should be named net-*, and should
- * have been started using --start flags.
- *
  * @param {string} host - the host to run against
  * @param {*} args - flags passed in from the command line.
  * @param {import('/scripts/index.js').NS} ns
@@ -132,7 +130,11 @@ async function runStopCommand(host, args, ns) {
             let process = sys.process;
             let isThisScript =
                 process.filename === ns.getScriptName() && process.args === ns.args && host === ns.getHostname();
-            if (!isThisScript) {
+            if (sys.name === 'stockmaster') {
+                // Quit stockmaster gracefully.
+                ns.exec('/stockmaster.js', sys.host, 1, '--liquidate');
+            } else if (!isThisScript) {
+                // Otherwise, kill everything important other than ourselves.
                 ns.tprint(`... Killing ${process.filename} ${process.args.join(' ')}`);
                 ns.kill(process.filename, host, ...process.args);
             }
@@ -150,7 +152,7 @@ async function runStopCommand(host, args, ns) {
  */
 async function runRestartCommand(host, args, ns) {
     await runStopCommand(host, args, ns);
-    await ns.asleep(100);
+    await ns.sleep(750);
     await runStartCommand(host, args, ns);
 }
 
@@ -205,7 +207,7 @@ async function runMonitorCommand(host, args, ns) {
         let msg =
             'monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.';
         ns.tprint(msg);
-    } else if (args._.length > 0) {
+    } else {
         // See if we can find a tail window to open
         let mon = subsystems.find((sys) => sys.name === 'net-monitor');
         if (mon.status !== 'RUNNING') {
@@ -215,10 +217,12 @@ async function runMonitorCommand(host, args, ns) {
         if (mon.status === 'RUNNING') {
             ns.tail(mon.filename, mon.host, ...mon.process.args);
         }
-        // Broadcast to the monitor app.
-        let display = args._.shift();
-        let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
-        await sendC2message(cmd, ns);
+        if (args._.length > 0) {
+            // Broadcast to the monitor app.
+            let display = args._.shift();
+            let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
+            await sendC2message(cmd, ns);
+        }
     }
 }
 
@@ -241,12 +245,15 @@ async function runServersCommand(host, args, ns) {
         net server delete server# - delete a server
         net server upgrade [server#] size - upgrade existing purchased server to size`;
         ns.tprint(msg);
-    } else if (args._.length > 0) {
-        let action = args._.shift();
+    } else {
+        let action = 'list';
+        if (args._.length > 0) {
+            action = args._.shift();
+        }
         if (action === 'list') {
             ns.exec(script_server, host, 1, '--list');
         }
-        if (action == 'prices') {
+        if (['price', 'prices'].includes(action)) {
             ns.exec(script_server, host, 1, '--prices');
         }
         if (action == 'buy') {
@@ -256,8 +263,10 @@ async function runServersCommand(host, args, ns) {
                 let siz = args._.pop();
                 let num = args._.pop();
                 num = num ?? 1;
-                ns.exec(script_server, host, 1, '--buy', siz, '--num', num, '--list');
-            } else {
+                for (let i = 0; i < num; i++) {
+                    ns.exec(script_server, host, 1, '--buy', siz);
+                }
+        } else {
                 let msg = `Unknown arguments to net server buy: '${args._.join(
                     ' '
                 )}' expected net server buy [num] siz`;
@@ -303,49 +312,5 @@ async function runBackdoorCommand(host, args, ns) {
     ns.exec('/scripts/net-backdoor', host, 1);
 }
 
-/**
- * Send a C2 message. If the queue is full, drops whatever falls off.
- * @param {C2Command} msg
- * @param {import("/scripts/index.js").NS} ns
- */
-export async function sendC2message(msg, ns) {
-    let s = JSON.stringify(msg);
-    await ns.writePort(c2_port, s);
-    ns.tprint(`C2 Message sent: ${s}`);
-}
 
-/**
- * Empty the C2 queue, looking for our messages. Then put
- * all the messages back on the queue, unless they're more
- * than 90 seconds old. Throw away the old ones.
- *
- * @param {string} system - Get messages addressed to this system
- * @param {import("/scripts/index.js").NS} ns
- * @returns {C2Message[]}
- */
-export async function readC2messages(system, ns) {
-    let allmsgs = [];
-    let inbox = [];
-    // Get everything from the queue
-    /** @type {C2Message} */
-    let msg = ns.readPort(c2_port);
-    while (msg !== 'NULL PORT DATA') {
-        allmsgs.push(msg);
-        msg = ns.readPort(2);
-    }
-    // Figure out which messages we should keep
-    while (allmsgs.length > 0) {
-        msg = allmsgs.pop();
-        msg = JSON.parse(msg);
-        if (msg.type === 'C2Message' && msg.to === system) {
-            inbox.push(msg);
-            ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
-        } else {
-            let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
-            if (msg.createtime > expiryTime) {
-                await sendC2message(msg, ns);
-            }
-        }
-    }
-    return inbox;
-}
+

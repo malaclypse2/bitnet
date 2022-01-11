@@ -87,7 +87,7 @@ export async function main(ns) {
         for (let i = 1; i <= 20; i++) {
             let ram = Math.pow(2, i);
             let cost = ns.nFormat(ns.getPurchasedServerCost(ram), '$0.00a');
-            ram = ns.nFormat(ram * Math.pow(2, 30), '0 b');
+            ram = ns.nFormat(ram * Math.pow(10, 9), '0 b');
             lines.push(`  ${pad('  ', i, true)}.  ${pad('      ', ram, true)}  ${pad('        ', cost)}`);
         }
         printLinesNColumns(lines, 2, ns.tprint);
