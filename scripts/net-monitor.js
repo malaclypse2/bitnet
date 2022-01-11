@@ -11,9 +11,9 @@ import {
     percentToGraph,
     C2Command,
     Server,
-    SubSystem
+    SubSystem,
 } from '/scripts/bit-lib.js';
-import { readC2messages } from '/scripts/net.js';
+import { readC2messages } from "/scripts/readC2messages";
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 
@@ -174,15 +174,11 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     let lines = [];
 
     // Printing.  Kind of hacky use of the logtype. Should probably fix it.
-    let printColumns;
-    if (logType.endsWith('3Up')) {
-        printColumns = (data) => printItemsNColumns(data, 3, ns.print);
-    }
+    let printColumns = (data) => printItemsNColumns(data, 1, ns.print);
     if (logType.endsWith('2Up')) {
         printColumns = (data) => printItemsNColumns(data, 2, ns.print);
-    }
-    if (logType.endsWith('1Up')) {
-        printColumns = (data) => printItemsNColumns(data, 1, ns.print);
+    } else if (logType.endsWith('3Up')) {
+        printColumns = (data) => printItemsNColumns(data, 3, ns.print);
     }
 
     let targets = Object.values(servers);
@@ -195,17 +191,27 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     if (logType.includes('Targets')) {
         // === TARGET DETAIL ===
         // --- Hacking ---
-        ns.print(`Hacking the following targets: `);
+        ns.print(`Hacking ${hackTargets.length} Targets: `);
+        //ns.print(`    ${hackTargets.map((target) => target.name).join(', ')}`);
         for (const target of hackTargets) {
-            let lines = printfSeverAsTarget(target, ns);
-            lines.push(lines);
+            let data = printfSeverAsTarget(target, ns);
+            lines.push(data);
         }
         printColumns(lines);
+        lines = [];
 
         // --- Prepping ---
         ns.print(`Preparing ${prepTargets.length} targets for attack:`);
+        for (const target of prepTargets) {
+            let data = printfSeverAsTarget(target, ns);
+            lines.push(data);
+        }
+        if (hackTargets.length > 4) {
+            ns.print(`    ${prepTargets.map((target) => target.name).join(', ')}`);
+        } else {
+            printColumns(lines);
+        }
         lines = [];
-        ns.print(`    ${prepTargets.map((target) => target.name).join(', ')}`);
     }
 
     if (logType.includes('Servers')) {
@@ -295,20 +301,27 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     // get information about the current pool of workers, and reformat everything as pretty strings.
     let pool = getPoolFromServers(servers, ns);
     let percentUsed = pool.running / (pool.free + pool.running);
+    let graph = percentToGraph(percentUsed, '          ');
     percentUsed = ns.nFormat(percentUsed, '0%');
+
     for (const key in pool) {
         pool[key] = ns.nFormat(pool[key], '0a');
     }
+    const free = pad(Array(5).join(' '), pool.free, true);
+    const running = pad(Array(5).join(' '), pool.running, true);
 
     // Shared summary trailer.
     ns.print('');
     lines = [
-        `  Free: ${pool.free}, Running: ${pool.running} (${percentUsed})`,
+        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}▏`,
         `  Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`,
     ];
-    let swarmStats = boxdraw(lines, 'Swarm Status', insideWidth);
-    lines = [`  Being Hacked: ${hackTargets.length}, Being Prepped: ${prepTargets.length}`];
-    swarmStats.push(...boxdraw(lines, 'Target Summary', insideWidth));
+    let swarmStats = [];
+    swarmStats.push(boxdraw(lines, 'Swarm Status', insideWidth));
 
-    printItemsNColumns([swarmStats], 1, ns.print);
+    lines = [`  Being Hacked: ${hackTargets.length}, Being Prepared: ${prepTargets.length}`];
+    swarmStats.push(boxdraw(lines, 'Target Summary', insideWidth));
+
+    ns.print('');
+    printColumns(swarmStats);
 }
