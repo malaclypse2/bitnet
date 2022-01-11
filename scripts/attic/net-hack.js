@@ -1,4 +1,4 @@
-import { getPlayerInfo, getAllServerInfo, root } from '/scripts/bit-lib.js';
+import { getPlayerInfo, getAllServerObjects, root } from '/scripts/bit-lib.js';
 import { C2Command, C2Response } from '/scripts/classes/C2Message.js';
 import { Server } from '/scripts/classes/Server.js';
 import { readC2messages, sendC2message } from '/scripts/net.js';
@@ -87,7 +87,7 @@ async function runStart(ns) {
     validateScripts(ns);
 
     let playerInfo = getPlayerInfo(ns);
-    servers = getAllServerInfo({}, ns);
+    servers = getAllServerObjects({}, ns);
     ns.print(servers);
 
     // Force a root check on available servers
@@ -183,23 +183,6 @@ function addTargets(playerInfo, numTargets, ns) {
     }
 }
 
-/**
- * @param {Object.<string,Server>} servers
- * @param {import('/scripts/index.js').NS} ns */
-export function getPoolFromServers(servers, ns) {
-    let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 };
-    let s = Array.from(Object.values(servers));
-
-    pool.free = s.reduce((sum, server) => sum + server.slots, 0);
-    pool.hack = s.reduce((sum, server) => sum + server.h, 0);
-    pool.grow = s.reduce((sum, server) => sum + server.g, 0);
-    pool.weaken = s.reduce((sum, server) => sum + server.w, 0);
-    pool.running += pool.grow + pool.hack + pool.weaken;
-    if (_DEBUG) {
-        ns.tprint(`Calculating pool as: ${JSON.stringify(pool)}.`);
-    }
-    return pool;
-}
 
 /**
  * Find servers with free capacity, and allocate them to targets with open attack requests.
@@ -233,9 +216,9 @@ function allocateSwarmThreads(servers, targets, player, ns) {
 
     for (const target of targets) {
         let delta = {};
-        delta.h = target.desired.hack - target.running.hack;
-        delta.w = target.desired.weaken - target.running.weaken;
-        delta.g = target.desired.grow - target.running.grow;
+        delta.h = target.desired.hack - target.targetedBy.hack;
+        delta.w = target.desired.weaken - target.targetedBy.weaken;
+        delta.g = target.desired.grow - target.targetedBy.grow;
 
         if (delta.h > 0) totalDesiredHackThreads += delta.h;
         if (delta.w > 0) totalDesiredWeakenThreads += delta.w;
@@ -280,7 +263,7 @@ function allocateSwarmThreads(servers, targets, player, ns) {
     let attackScripts = { hack: script_hack, grow: script_grow, weaken: script_weaken };
     for (const target of targets) {
         target.desired = { hack: target.desired.hack, grow: target.desired.grow, weaken: target.desired.weaken };
-        target.running = { hack: target.running.hack, grow: target.running.grow, weaken: target.running.weaken };
+        target.targetedBy = { hack: target.targetedBy.hack, grow: target.targetedBy.grow, weaken: target.targetedBy.weaken };
     }
     // Exec all the attack threads on servers
     for (const servername in servers) {
@@ -296,7 +279,7 @@ function allocateSwarmThreads(servers, targets, player, ns) {
         for (const target of targets) {
             for (const attackType of ['hack', 'weaken', 'grow']) {
                 let desired = Math.min(
-                    target.desired[attackType] - target.running[attackType],
+                    target.desired[attackType] - target.targetedBy[attackType],
                     allocated[attackType],
                     server.slots
                 );
@@ -307,7 +290,7 @@ function allocateSwarmThreads(servers, targets, player, ns) {
                     if (retval > 0) {
                         allocated[attackType] -= desired;
                         server.slots -= desired;
-                        target.running[attackType] += desired;
+                        target.targetedBy[attackType] += desired;
                         // TODO: bleh. code smell. Sets server.w, server.g, or server.h
                         let letter = attackType[0];
                         server[letter] += desired;
@@ -330,11 +313,11 @@ function allocateSwarmThreads(servers, targets, player, ns) {
 export function getAttackStatus(servers, targets, ns) {
     for (const servername in servers) {
         const server = servers[servername];
-        server.resetRunningServerThreadCounts();
+        server.running = { hack: 0, grow: 0, weaken: 0 };
         server.update(ns);
     }
     for (const target of targets) {
-        target.resetRunningTargetThreadCounts();
+        target.targetedBy = { hack: 0, grow: 0, weaken: 0 };
         target.update(ns);
     }
     // Then reset by querying all the servers
@@ -346,18 +329,18 @@ export function getAttackStatus(servers, targets, ns) {
             const proc = procs.pop();
             if (proc.filename.includes('/weak')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
-                if (target) target.running.weaken += proc.threads;
-                server.w += proc.threads;
+                if (target) target.targetedBy.weaken += proc.threads;
+                server.running.weaken += proc.threads;
             }
             if (proc.filename.includes('/grow')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
-                if (target) target.running.grow += proc.threads;
-                server.g += proc.threads;
+                if (target) target.targetedBy.grow += proc.threads;
+                server.running.grow += proc.threads;
             }
             if (proc.filename.includes('/hack')) {
                 let target = targets.find((target) => target.name == proc.args[0]);
-                if (target) target.running.hack += proc.threads;
-                server.h += proc.threads;
+                if (target) target.targetedBy.hack += proc.threads;
+                server.running.hack += proc.threads;
             }
         }
         servers[servername] = server;

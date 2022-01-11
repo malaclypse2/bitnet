@@ -30,55 +30,20 @@
  */
 const c2_port = 2;
 
-// eslint-disable-next-line no-unused-vars
-import { C2Command, C2Message } from '/scripts/classes/C2Message';
-
-export class SubSystem {
-    /**
-     * @param {string} name - The human readable name of this subsystem
-     * @param {string} filename - The script name that starts this subsystem
-     */
-    constructor(name, filename, host) {
-        this.name = name;
-        this.filename = filename;
-        this.host = host;
-        this.status = 'UNKNOWN';
-        /** @type {import("/scripts/index.js").ProcessInfo} */
-        this.process = {};
-        /** @type {import("/scripts/index.js").RunningScript} */
-        this.scriptInfo = {};
-    } // end constructor()
-
-    /**
-     * @param {import("/scripts/index.js").NS} ns
-     */
-    refreshStatus(ns) {
-        let ps = ns.ps(this.host);
-        this.status = 'STOPPED';
-        for (const process of ps) {
-            let isSystemScript = this.filename === process.filename;
-            let hasStart = process.args.includes('--start');
-            if (isSystemScript && hasStart) {
-                this.status = 'RUNNING';
-                this.process = process;
-                this.scriptInfo = ns.getRunningScript(this.filename, this.host, ...process.args);
-                break;
-            }
-        }
-    } // end refreshStatus()
-}
+import { SubSystem } from '/scripts/classes/SubSystem.js';
+import { C2Command, C2Message } from '/scripts/classes/C2Message.js';
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', '/daemon.js', 'home'),
+    new SubSystem('daemon', 'daemon.js', 'home'),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home'),
-    new SubSystem('stats', '/stats.js', 'home'),
-    new SubSystem('hacknet-upgrade-manager', '/hacknet-upgrade-manager.js', 'home'),
-    new SubSystem('stockmaster', '/stockmaster.js', 'home'),
-    new SubSystem('gangs', '/gangs.js', 'home'),
-    new SubSystem('spend-hacknet-hashes', '/spend-hacknet-hashes.js', 'home'),
-    new SubSystem('sleeve', '/spend-hacknet-hashes.js', 'home'),
-    new SubSystem('work-for-factions', '/work-for-factions.js', 'home'),
+    new SubSystem('stats', 'stats.js', 'home'),
+    new SubSystem('hacknet-upgrade-manager', 'hacknet-upgrade-manager.js', 'home'),
+    new SubSystem('stockmaster', 'stockmaster.js', 'home'),
+    new SubSystem('gangs', 'gangs.js', 'home'),
+    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
+    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
+    new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
 ];
 
 /**
@@ -95,9 +60,9 @@ export async function main(ns) {
     }
 
     let handlers = {
-//        start: runStartCommand,
-//        stop: runStopCommand,
-//        restart: runRestartCommand,
+        //        start: runStartCommand,
+        //        stop: runStopCommand,
+        //        restart: runRestartCommand,
         status: runStatusCommand,
         hack: runHackCommand,
         monitor: runMonitorCommand,
@@ -320,7 +285,9 @@ async function runStatusCommand(host, args, ns) {
         let money = ns.nFormat(system.scriptInfo.onlineMoneyMade, '$0.00a');
         let duration = ns.tFormat(system.scriptInfo.onlineRunningTime * 1000);
         ns.tprint(`... ${system.name}: ${system.status}.`);
-        ns.tprint(`...    ${money}; Running ${duration}`);
+        if (system.status === 'RUNNING') {
+            ns.tprint(`...    ${money}; Running ${duration}`);
+        }
     }
     ns.tprint(``);
     // Some summary info, too

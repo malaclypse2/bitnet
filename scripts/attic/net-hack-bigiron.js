@@ -1,4 +1,4 @@
-import { getAllServerInfo, getPlayerInfo, printfSeverAsTarget, worker_size } from '/scripts/bit-lib.js';
+import { getAllServerObjects, getPlayerInfo, printfSeverAsTarget, worker_size } from '/scripts/bit-lib.js';
 import { Server } from "/scripts/classes/Server.js";
 import { findTargets, getAttackStatus } from '/scripts/net-hack.js';
 
@@ -15,7 +15,7 @@ export async function main(ns) {
     let hostname = ns.getHostname();
     let scriptname = ns.getScriptName();
     let playerInfo = getPlayerInfo(ns);
-    let servers = getAllServerInfo({}, ns);
+    let servers = getAllServerObjects({}, ns);
     let host = servers[hostname];
     let targets = findTargets(servers, playerInfo, ns);
     getAttackStatus(servers, targets, ns);
@@ -60,29 +60,29 @@ export async function prepare(host, target, ns) {
     let desired = { grow: 0, weaken: 0 };
 
     // Calculate growth threads, accounting for any inbound attack threads
-    let hackAmount = target.hackFactor * target.running.hack;
+    let hackAmount = target.hackFactor * target.targetedBy.hack;
     let growthFactor = (target.maxMoney + hackAmount) / target.currentMoney;
     desired['grow'] = Math.ceil(ns.growthAnalyze(target.name, growthFactor, host.cores));
-    desired['grow'] -= target.running.grow;
+    desired['grow'] -= target.targetedBy.grow;
 
     // Assuming we launch those grow threads, how much will security increase?
     let secGrowth = ns.growthAnalyzeSecurity(desired.grow);
     // And all the other inbound hack and growth threads.
-    secGrowth += ns.hackAnalyzeSecurity(target.running.hack);
-    secGrowth += ns.growthAnalyzeSecurity(target.running.grow);
+    secGrowth += ns.hackAnalyzeSecurity(target.targetedBy.hack);
+    secGrowth += ns.growthAnalyzeSecurity(target.targetedBy.grow);
     desired['weaken'] = (target.securityCurrent - target.securityBase + secGrowth) / 0.05;
     desired['weaken'] = Math.ceil(desired['weaken']);
 
     let free = host.slots;
     let time = ns.getTimeSinceLastAug();
     let completetime = 0;
-    if (target.running.hack) {
+    if (target.targetedBy.hack) {
         completetime = Math.max(ns.getHackTime(target.name), completetime);
     }
-    if (desired.grow || target.running.grow) {
+    if (desired.grow || target.targetedBy.grow) {
         completetime = Math.max(ns.getGrowTime(target.name), completetime);
     }
-    if (desired.weaken || target.running.weaken) {
+    if (desired.weaken || target.targetedBy.weaken) {
         completetime = Math.max(ns.getWeakenTime(target.name), completetime);
     }
     if (completetime > 0) completetime += time;
@@ -92,8 +92,8 @@ export async function prepare(host, target, ns) {
             ns.print(`Launcing ${desired.grow} grow threads versus '${target.name}'`);
             let pid = launch(host, target, script_grow, desired.grow, time, ns);
             if (pid != 0) {
-                host.g += desired.grow;
-                target.running.grow += desired.grow;
+                host.running.grow += desired.grow;
+                target.targetedBy.grow += desired.grow;
                 free -= desired.grow;
             }
         }
@@ -101,8 +101,8 @@ export async function prepare(host, target, ns) {
             ns.print(`Launcing ${desired.weaken} weaken threads versus '${target.name}'`);
             let pid = launch(host, target, script_weaken, desired.weaken, time, ns);
             if (pid != 0) {
-                host.w += desired.weaken;
-                target.running.weaken += desired.weaken;
+                host.running.weaken += desired.weaken;
+                target.targetedBy.weaken += desired.weaken;
                 free -= desired.weaken;
             }
         }

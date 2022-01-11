@@ -4,6 +4,34 @@ const worker_size = 1.75;
  * @export
  * @class Server
  */
+const PurchasedServerNames = [
+    'Alpha(α)',
+    'Beta(β)',
+    'Gamma(γ)',
+    'Delta(Δ)',
+    'Epsilon(ε)',
+    'Zeta(ζ)',
+    'Eta(η)',
+    'Theta(θ)',
+    'Iota(ι)',
+    'Kappa(κ)',
+    'Lambda(λ)',
+    'Mu(μ)',
+    'Nu(ν)',
+    'Xi(ξ)',
+    'Omicron(ο)',
+    'Pi(π)',
+    'Rho(ρ)',
+    'Sigma(σ)',
+    'Tau(τ)',
+    'Upsilon(υ)',
+    'Phi(φ)',
+    'Chi(χ)',
+    'Psi(Ψ)',
+    'Omega(Ω)',
+    'Aleph(א)',
+    'daemon',
+];
 
 export class Server {
     /**
@@ -15,9 +43,22 @@ export class Server {
     constructor(servername, ns) {
         this.name = servername;
         this.update(ns);
-        this.resetRunningServerThreadCounts();
-        this.resetRunningTargetThreadCounts();
+        this.running = { hack: 0, grow: 0, weaken: 0 };
+        this.targetedBy = { hack: 0, grow: 0, weaken: 0 };
         this.desired = { hack: 0, grow: 0, weaken: 0 };
+        this.isPurchasedServer = false;
+        // Let's not actually call ns.getPurchasedServers. That's expensive! Just check for our common server names.
+        let basename = this.name.split('-')[0];
+        if (PurchasedServerNames.includes(basename)) {
+            this.isPurchasedServer = true;
+        }
+        this.symbol = this.name[0];
+
+        let left=this.name.indexOf('(');
+        let right=this.name.lastIndexOf(')');
+        if (left !== -1 && right !== -1) {
+            this.symbol = this.name.substring(left+1, right)
+        }
     }
     update(ns) {
         let servername = this.name;
@@ -25,12 +66,7 @@ export class Server {
         this.ram = ns.getServerMaxRam(servername);
         this.cores = ns.getServer(servername).cpuCores;
         // Try to leave an extra 10% free on home
-        if (this.name === 'home') {
-            let cappedRam = Math.floor(this.ram * 0.9);
-            this.freeRam = cappedRam - ns.getServerUsedRam(servername);
-        } else {
-            this.freeRam = this.ram - ns.getServerUsedRam(servername);
-        }
+        this.freeRam = this.ram - ns.getServerUsedRam(servername);
         this.rooted = ns.hasRootAccess(servername);
         this.slots = 0;
         if (this.rooted) {
@@ -45,13 +81,5 @@ export class Server {
         this.securityBase = ns.getServerMinSecurityLevel(servername);
         this.securityCurrent = ns.getServerSecurityLevel(servername);
         this.levelRequired = ns.getServerRequiredHackingLevel(servername);
-    }
-    resetRunningServerThreadCounts() {
-        this.w = 0;
-        this.g = 0;
-        this.h = 0;
-    }
-    resetRunningTargetThreadCounts() {
-        this.running = { hack: 0, grow: 0, weaken: 0 };
     }
 }
