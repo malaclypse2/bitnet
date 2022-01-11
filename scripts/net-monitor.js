@@ -9,11 +9,11 @@ import {
     pad,
     boxdraw,
     percentToGraph,
+    C2Command,
+    Server,
+    SubSystem
 } from '/scripts/bit-lib.js';
 import { readC2messages } from '/scripts/net.js';
-import { C2Command } from '/scripts/classes/C2Message.js';
-import { Server } from '/scripts/classes/Server.js';
-import { SubSystem } from '/scripts/classes/SubSystem.js';
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 

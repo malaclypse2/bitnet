@@ -30,8 +30,7 @@
  */
 const c2_port = 2;
 
-import { SubSystem } from '/scripts/classes/SubSystem.js';
-import { C2Command, C2Message } from '/scripts/classes/C2Message.js';
+import { SubSystem, C2Command, C2Message } from '/scripts/bit-lib.js';
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),

@@ -1,5 +1,4 @@
-import { pad, printItemsNColumns, printLinesNColumns } from '/scripts/bit-lib.js';
-import { Server } from '/scripts/classes/Server';
+import { Server, pad, printItemsNColumns, printLinesNColumns } from '/scripts/bit-lib.js';
 
 let names = [
     'Alpha(α)',
@@ -59,7 +58,7 @@ export async function main(ns) {
         servers.unshift('home');
         for (const servername of servers) {
             let server = new Server(servername, ns);
-            
+
             let servernm = pad('            ', servername, true);
             let ram = ns.nFormat(server.ram * Math.pow(2, 30), '0 b');
             ram = pad('      ', ram);
@@ -74,9 +73,9 @@ export async function main(ns) {
             ns.tprint(line);
         }
         if (lines.length === 0) {
-            ns.tprint('No purchased servers.')
+            ns.tprint('No purchased servers.');
         }
-        ns.tprint('')
+        ns.tprint('');
     }
 
     if (args.prices) {

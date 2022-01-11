@@ -1,5 +1,8 @@
-import { Server } from '/scripts/classes/Server.js';
 /**@typedef{import('/scripts/index.js').NS} NS */
+
+// --- EXPORTED CONSTANTS ---
+const worker_size = 1.75;
+
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -17,6 +20,8 @@ export async function main(ns) {
     ns.tprint(JSON.stringify(servers));
 }
 
+
+// --- UTILITY FUNCTIONS ---
 /**
  * @typedef {import(".").Player} Player
  * @property {number} exploits - The number of exploits owned by the player
@@ -131,11 +136,11 @@ export function percentToGraph(pct, graph='     '){
     const progressSteps = '▏▎▍▌▋▊▉█';
     let progressbar = Array.from(graph);
     let filled = Math.floor(pct * progressbar.length);
-    for (let i = 0; i < filled; i++) {
+    for (let i = 0; i <= filled; i++) {
         progressbar[i] = progressSteps[progressSteps.length - 1];
     }
     let pctleft = (pct * progressbar.length) - filled;
-    let whichbar = Math.round(pctleft * progressSteps.length);
+    let whichbar = Math.floor(pctleft * progressSteps.length);
     progressbar[filled] = progressSteps[whichbar];
     progressbar = progressbar.join('');
     return progressbar;
@@ -213,6 +218,11 @@ export function getAllServerObjects(servers, ns) {
 export function updateAttackStatus(_servers, ns) {
     // We have a mix of Arrays and servername-keyed Objects in my codebase. Ought to convert to all Arrays, but I haven't paid the technical debt yet.
     let servers = Object.values(_servers);
+    // Reset our counts.
+    for (const server of servers) {
+        server.running = { grow: 0, hack: 0, weaken: 0 };
+        server.targetedBy = { grow: 0, hack: 0, weaken: 0 };
+    }
 
     // Server.running and Server.targetedBy need to know what's running on all the servers.
     let isHackProcess = (proc) =>
@@ -222,8 +232,6 @@ export function updateAttackStatus(_servers, ns) {
     let isGrowProcess = (proc) =>
         proc.filename.includes('grow') && proc.args.length > 0 && servers.some((s) => s.name === proc.args[0]);
     for (const server of servers) {
-        server.running = { grow: 0, hack: 0, weaken: 0 };
-        server.targetedBy = { grow: 0, hack: 0, weaken: 0 };
         let ps = ns.ps(server.name);
         for (const proc of ps) {
             let procType = 'unknown';
@@ -356,4 +364,136 @@ export function getPoolFromServers(servers, ns) {
         ns.tprint(`Calculating pool as: ${JSON.stringify(pool)}.`);
     }
     return pool;
+}
+
+export class C2Message {
+    /**
+     * @param {string} from
+     * @param {string} to
+     * @param {string} action
+     * @param {string} key
+     * @param {*} value
+     * @param {import("/scripts/index.js").NS} ns
+     */
+    constructor(to, from, action, key, value, ns) {
+        this.type = 'C2Message';
+        this.subtype = '';
+        this.to = to;
+        this.from = from;
+        this.action = action;
+        this.key = key;
+        this.value = value;
+        this.createtime = ns.getTimeSinceLastAug();
+    }
+}
+
+export class C2Command extends C2Message {
+    constructor(to, from, action, key, value, ns) {
+        super(to, from, action, key, value, ns);
+        this.subtype = 'C2Command';
+    }
+}
+
+export class C2Response extends C2Message {
+    constructor(to, from, action, key, value, ns) {
+        super(to, from, action, key, value, ns);
+        this.subtype = 'C2Response';
+    }
+}
+
+
+/**
+ * @export
+ * @class Server
+ */
+const PurchasedServerNames = [
+'Alpha(α)','Beta(β)','Gamma(γ)','Delta(Δ)','Epsilon(ε)','Zeta(ζ)','Eta(η)',
+'Theta(θ)','Iota(ι)','Kappa(κ)','Lambda(λ)','Mu(μ)','Nu(ν)','Xi(ξ)','Omicron(ο)',
+'Pi(π)','Rho(ρ)','Sigma(σ)','Tau(τ)','Upsilon(υ)','Phi(φ)','Chi(χ)','Psi(Ψ)',
+'Omega(Ω)','Aleph(א)','daemon',
+];
+
+export class Server {
+    /**
+     * Creates an instance of Server.
+     * @param {string} servername
+     * @param {import(".").NS } ns
+     * @memberof Server
+     */
+    constructor(servername, ns) {
+        this.name = servername;
+        this.update(ns);
+        this.running = { hack: 0, grow: 0, weaken: 0 };
+        this.targetedBy = { hack: 0, grow: 0, weaken: 0 };
+        this.desired = { hack: 0, grow: 0, weaken: 0 };
+        this.isPurchasedServer = false;
+        // Let's not actually call ns.getPurchasedServers. That's expensive! Just check for our common server names.
+        let basename = this.name.split('-')[0];
+        if (PurchasedServerNames.includes(basename)) {
+            this.isPurchasedServer = true;
+        }
+        this.symbol = this.name[0];
+
+        let left=this.name.indexOf('(');
+        let right=this.name.lastIndexOf(')');
+        if (left !== -1 && right !== -1) {
+            this.symbol = this.name.substring(left+1, right)
+        }
+    }
+    update(ns) {
+        let servername = this.name;
+
+        this.ram = ns.getServerMaxRam(servername);
+        this.cores = ns.getServer(servername).cpuCores;
+        // Try to leave an extra 10% free on home
+        this.freeRam = this.ram - ns.getServerUsedRam(servername);
+        this.rooted = ns.hasRootAccess(servername);
+        this.slots = 0;
+        if (this.rooted) {
+            this.slots = Math.floor(this.freeRam / worker_size);
+        }
+        this.maxMoney = ns.getServerMaxMoney(servername);
+        this.currentMoney = ns.getServerMoneyAvailable(servername);
+        this.hackFactor = ns.hackAnalyze(servername);
+        this.hackTime = ns.getHackTime(servername);
+        this.growTime = ns.getGrowTime(servername);
+        this.weakenTime = ns.getWeakenTime(servername);
+        this.securityBase = ns.getServerMinSecurityLevel(servername);
+        this.securityCurrent = ns.getServerSecurityLevel(servername);
+        this.levelRequired = ns.getServerRequiredHackingLevel(servername);
+    }
+}
+export class SubSystem {
+    /**
+     * @param {string} name - The human readable name of this subsystem
+     * @param {string} filename - The script name that starts this subsystem
+     */
+    constructor(name, filename, host) {
+        this.name = name;
+        this.filename = filename;
+        this.host = host;
+        this.status = 'UNKNOWN';
+        /** @type {import("/scripts/index.js").ProcessInfo} */
+        this.process = {};
+        /** @type {import("/scripts/index.js").RunningScript} */
+        this.scriptInfo = {};
+    } // end constructor()
+
+    /**
+     * @param {import("/scripts/index.js").NS} ns
+     */
+    refreshStatus(ns) {
+        let ps = ns.ps(this.host);
+        ps.reverse();
+        this.status = 'STOPPED';
+        for (const process of ps) {
+            let isSystemScript = this.filename === process.filename;
+            if (isSystemScript) {
+                this.status = 'RUNNING';
+                this.process = process;
+                this.scriptInfo = ns.getRunningScript(this.filename, this.host, ...process.args);
+                break;
+            }
+        }
+    } // end refreshStatus()
 }
