@@ -1,8 +1,61 @@
 /**@typedef{import('/scripts/index.js').NS} NS */
 
 // --- EXPORTED CONSTANTS ---
-export const worker_size = 1.75;
+export const worker_size = 2.0; // 1.75 is probably more acurate, but this gives some grace for inefficient scripts.
 export const c2_port = 2;
+export class SubSystem {
+    /**
+     * @param {string} name - The human readable name of this subsystem
+     * @param {string} filename - The script name that starts this subsystem
+     * @param {string} host - The host the subsystem should be running on
+     * @param {string|number[]} defaultargs - default arguments if we want to start / restart this subsystem.
+     * @param {boolean} shouldTail - Is the tail file of this subsystem useful?
+     */
+    constructor(name, filename, host, defaultargs = [], shouldTail = false) {
+        this.name = name;
+        this.filename = filename;
+        this.host = host;
+        this.shouldTail = shouldTail;
+        this.defaultargs = defaultargs;
+        this.status = 'UNKNOWN';
+        /** @type {import("/scripts/index.js").ProcessInfo} */
+        this.process = {};
+        /** @type {import("/scripts/index.js").RunningScript} */
+        this.scriptInfo = {};
+    } // end constructor()
+
+    /**
+     * @param {import("/scripts/index.js").NS} ns
+     */
+    refreshStatus(ns) {
+        let ps = ns.ps(this.host);
+        ps.reverse();
+        this.status = 'STOPPED';
+        for (const process of ps) {
+            let isSystemScript = this.filename === process.filename;
+            if (isSystemScript) {
+                this.status = 'RUNNING';
+                this.process = process;
+                this.scriptInfo = ns.getRunningScript(this.filename, this.host, ...process.args);
+                break;
+            }
+        }
+    } // end refreshStatus()
+}
+
+export const subsystems = [
+    //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
+    new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s'], true),
+    new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], true),
+    new SubSystem('stats', 'stats.js', 'home'),
+    new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], true),
+    new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
+    new SubSystem('gangs', 'gangs.js', 'home'),
+    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
+    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
+    new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
+    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.90, '--reserve-percent', 0.75], true),
+];
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -32,7 +85,7 @@ export async function main(ns) {
  * Get a player object, and enrich it a bit
  *
  * @export
- * @param {import(".").NS} ns
+ * @param {NS} ns
  * @return {Player}
  */
 export function getPlayerInfo(ns) {
@@ -67,7 +120,12 @@ export function tprintServerAsTarget(server, ns) {
     }
 }
 
-/** @param {import(".").NS } ns */
+/**
+ *
+ * @param {Server} server
+ * @param {NS} ns
+ * @returns {string}[]
+ */
 export function printfSeverAsTarget(server, ns) {
     // Try to keep it to two or three lines per server, or it will never fit in a log window, even with just a few targets
     const moneyCur = ns.nFormat(server.currentMoney, '$0.0a');
@@ -75,16 +133,24 @@ export function printfSeverAsTarget(server, ns) {
     const moneyStr = `${moneyCur} (${moneyPercent})`;
 
     const secBase = pad('  ', ns.nFormat(server.securityBase, '0'), true);
-    const secIncr = pad('    ', ns.nFormat(server.securityCurrent - server.securityBase, '0.0'));
+    const secIncr = pad('    ', ns.nFormat(server.securityCurrent - server.securityBase, '0.00'));
     const secStr = `Sec ${secBase} +${secIncr}`;
 
     const hacksRunning = ns.nFormat(server.targetedBy.hack, '0a');
     const growsRunning = ns.nFormat(server.targetedBy.grow, '0a');
     const weakensRunning = ns.nFormat(server.targetedBy.weaken, '0a');
+    let hackFactor = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    //let hackFactor = server.hackFactor;
+    const amountToBeStolen = hackFactor * server.targetedBy.hack * server.currentMoney;
+    let stealing = '';
+    if (amountToBeStolen > 0) {
+        stealing = ns.nFormat(amountToBeStolen, '$0.0a');
+        stealing = ' (' + stealing + ')';
+    }
 
-    const hackStr = pad(Array(16).join('─'), `Hack ${hacksRunning}├`);
-    const growStr = pad(Array(17).join('─'), `┤Grow ${growsRunning}├`);
-    const weakenStr = pad(Array(18).join('─'), `┤Weaken ${weakensRunning}`, true);
+    const hackStr = pad(Array(25).join('─'), `Hack ${hacksRunning}${stealing}├`);
+    const growStr = pad(Array(12).join('─'), `┤Grow ${growsRunning}├`);
+    const weakenStr = pad(Array(14).join('─'), `┤Weaken ${weakensRunning}`, true);
 
     let line1 = `┌┤`;
     line1 += pad(Array(17).join('─'), server.name + '├');
@@ -123,7 +189,7 @@ export function boxdraw(lines, title='', width=0, wrap=false, titleright= false,
     let bottomline = `└${bline}┘`
     // wrap if we need to
     if (wrap) {
-        lines = lines.map((l)=>wrap(l, maxlen)).flat();
+        lines = lines.map((l)=>wordwrap(l, maxlen)).flat();
     }
     // pad out the lines to the right width
     lines = lines.map((line) => pad(Array(maxlen+1).join(' '), line));
@@ -135,8 +201,14 @@ export function boxdraw(lines, title='', width=0, wrap=false, titleright= false,
     return lines;
 }
 
-export function percentToGraph(pct, graph = '     ') {
+export function percentToGraph(pct, graph = '     ', cap = '▏') {
+    // These work better in more fonts, but I don't like them as well.
+    // If we enable these, we need to change the default cap too.
+    // const progressSteps = '░▒▓█';
+
+    // These look best in Fira Mono
     const progressSteps = '▏▎▍▌▋▊▉█';
+
     let progressbar = Array.from(graph);
     let filled = Math.floor(pct * progressbar.length);
     for (let i = 0; i <= filled; i++) {
@@ -146,6 +218,7 @@ export function percentToGraph(pct, graph = '     ') {
     let whichbar = Math.floor(pctleft * progressSteps.length);
     progressbar[filled] = progressSteps[whichbar];
     progressbar = progressbar.join('');
+    progressbar += cap;
     return progressbar;
 }
 
@@ -186,7 +259,7 @@ function scan(ns, parent, server, list) {
 
 /** Get a list of all server names.
  * @export
- * @param {import(".").NS } ns
+ * @param {NS} ns
  * @return {string[]}
  */
 export function getServerNames(ns) {
@@ -244,14 +317,16 @@ export function updateAttackStatus(_servers, ns) {
             if (procType !== 'unknown') {
                 // Update the source and target of these threads.
                 server.running[procType] += proc.threads;
-                servers.find((s) => s.name === proc.args[0]).targetedBy[procType] += proc.threads;
+                let target = servers.find((s) => s.name === proc.args[0]);
+                target.targetedBy[procType] += proc.threads;
+                target.lastTimeSeenTargetedBy[procType] = ns.getTimeSinceLastAug();
             }
         }
     }
     // Do we care about the server.desired stats anymore? SKip for now.
 }
 
-/** @param {import(".").NS } ns */
+/** @param {NS} ns */
 export function getProgramCount(ns) {
     let count = 0;
     if (ns.fileExists('BruteSSH.exe', 'home')) count++;
@@ -263,7 +338,7 @@ export function getProgramCount(ns) {
     return count;
 }
 
-/** @param {import(".").NS } ns */
+/** @param {NS} ns */
 export function root(target, ns) {
     let exploits = getProgramCount(ns);
     let needed = ns.getServerNumPortsRequired(target);
@@ -279,7 +354,7 @@ export function root(target, ns) {
     return 0;
 }
 
-/** @param {import(".").NS } ns */
+/** @param {NS} ns */
 export function stopscript(servers, script, ns) {
     for (const servername in servers) {
         ns.scriptKill(script, servername);
@@ -352,7 +427,7 @@ export function printLinesNColumns(lines, n, printfn) {
 
 /**
  * @param {Object.<string,Server>} servers
- * @param {import('/scripts/index.js').NS} ns */
+ * @param {NS} ns */
 export function getPoolFromServers(servers, ns) {
     const _DEBUG = false;
     let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 };
@@ -386,7 +461,22 @@ export class C2Message {
         this.action = action;
         this.key = key;
         this.value = value;
-        this.createtime = ns.getTimeSinceLastAug();
+        if (ns) this.createtime = ns.getTimeSinceLastAug();
+        else this.createtime = 0;
+    }
+    static fromObject(obj) {
+        if (obj.type === 'C2Message') {
+            let message;
+            if (obj.subtype === 'C2Command') {
+                message = new C2Command();
+            } else if (obj.subtype === 'C2Response') {
+                message = new C2Response();
+            } else {
+                message = new C2Message();
+            }
+            message = Object.assign(message, obj);
+            return message;
+        }
     }
 }
 
@@ -441,7 +531,7 @@ export class Server {
     /**
      * Creates an instance of Server.
      * @param {string} servername
-     * @param {import(".").NS } ns
+     * @param {NS} ns
      * @memberof Server
      */
     constructor(servername, ns) {
@@ -449,6 +539,7 @@ export class Server {
         this.update(ns);
         this.running = { hack: 0, grow: 0, weaken: 0 };
         this.targetedBy = { hack: 0, grow: 0, weaken: 0 };
+        this.lastTimeSeenTargetedBy = { hack: 0, grow: 0, weaken: 0 };
         this.desired = { hack: 0, grow: 0, weaken: 0 };
         this.isPurchasedServer = false;
         // Let's not actually call ns.getPurchasedServers. That's expensive! Just check for our common server names.
@@ -464,9 +555,9 @@ export class Server {
             this.symbol = this.name.substring(left + 1, right);
         }
     }
+    /** @param {NS} ns */
     update(ns) {
         let servername = this.name;
-
         this.ram = ns.getServerMaxRam(servername);
         this.cores = ns.getServer(servername).cpuCores;
         // Try to leave an extra 10% free on home
@@ -486,40 +577,6 @@ export class Server {
         this.securityCurrent = ns.getServerSecurityLevel(servername);
         this.levelRequired = ns.getServerRequiredHackingLevel(servername);
     }
-}
-export class SubSystem {
-    /**
-     * @param {string} name - The human readable name of this subsystem
-     * @param {string} filename - The script name that starts this subsystem
-     */
-    constructor(name, filename, host) {
-        this.name = name;
-        this.filename = filename;
-        this.host = host;
-        this.status = 'UNKNOWN';
-        /** @type {import("/scripts/index.js").ProcessInfo} */
-        this.process = {};
-        /** @type {import("/scripts/index.js").RunningScript} */
-        this.scriptInfo = {};
-    } // end constructor()
-
-    /**
-     * @param {import("/scripts/index.js").NS} ns
-     */
-    refreshStatus(ns) {
-        let ps = ns.ps(this.host);
-        ps.reverse();
-        this.status = 'STOPPED';
-        for (const process of ps) {
-            let isSystemScript = this.filename === process.filename;
-            if (isSystemScript) {
-                this.status = 'RUNNING';
-                this.process = process;
-                this.scriptInfo = ns.getRunningScript(this.filename, this.host, ...process.args);
-                break;
-            }
-        }
-    } // end refreshStatus()
 }
 
 /**
@@ -619,7 +676,8 @@ export async function readC2messages(system, ns) {
     while (allmsgs.length > 0) {
         msg = allmsgs.pop();
         msg = JSON.parse(msg);
-        if (msg.type === 'C2Message' && msg.to === system) {
+        msg = C2Message.fromObject(msg);
+        if (msg instanceof C2Message && msg.to === system) {
             inbox.push(msg);
             // ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
         } else {
@@ -637,7 +695,7 @@ export async function readC2messages(system, ns) {
  * @param {C2Command} msg
  * @param {import("/scripts/index.js").NS} ns
  */
- export async function sendC2message(msg, ns) {
+export async function sendC2message(msg, ns) {
     let s = JSON.stringify(msg);
     await ns.writePort(c2_port, s);
     // ns.tprint(`C2 Message sent: ${s}`);

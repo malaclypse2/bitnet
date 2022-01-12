@@ -20,6 +20,7 @@
  * net monitor Targets2Up
  * net servers list
  * net servers buy
+ * net tail
  * (TODO)
  * net servers upgrade
  * net hacknet buy
@@ -27,20 +28,7 @@
  *
  */
 /** @typedef{import('/scripts/index.js').NS} NS*/
-import { SubSystem, C2Command, C2Message, sendC2message } from '/scripts/bit-lib.js';
-
-export const subsystems = [
-    //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', 'daemon.js', 'home'),
-    new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home'),
-    new SubSystem('stats', 'stats.js', 'home'),
-    new SubSystem('hacknet-upgrade-manager', 'hacknet-upgrade-manager.js', 'home'),
-    new SubSystem('stockmaster', 'stockmaster.js', 'home'),
-    new SubSystem('gangs', 'gangs.js', 'home'),
-    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
-];
+import { subsystems, C2Command, C2Message, sendC2message } from '/scripts/bit-lib.js';
 
 /**
  * @param {NS} ns
@@ -64,6 +52,7 @@ export async function main(ns) {
         monitor: runMonitorCommand,
         servers: runServersCommand,
         backdoor: runBackdoorCommand,
+        tail: runTailCommand,
     };
     // command aliases
     if (args._.length > 0) {
@@ -109,11 +98,34 @@ async function runStartCommand(host, args, ns) {
     // This will bring a running monitor mindow to life, or start one if there isn't one.
     await runMonitorCommand(host, args, ns);
 
-    // Start the daemon in stock mode if it's not running.
-    if(subsystems.find((s)=>s.name === 'daemon').status === 'STOPPED') {
-        ns.spawn('daemon.js', 1, '-s');
-    }
+    // Start the host manager
+    let subsystem = subsystems.find((s)=>s.name === 'host-manager');
+    if(subsystem.status === 'STOPPED') {
+        ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
+    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`)
+
+    // Start the daemon in if it's not running. Must do this last, if we use spawn instead of exec.
+    subsystem = subsystems.find((s)=>s.name === 'daemon');
+    if(subsystem.status === 'STOPPED') {
+        //ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
+        ns.spawn(subsystem.filename, 1, ...subsystem.defaultargs);
+    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`)
     
+}
+
+/**
+ * Tail all interesting processes
+ * .
+ * @param {string} host - Not used
+ * @param {*} args - flags passed in from the command line.
+ * @param {NS} ns
+ */
+ async function runTailCommand(_host, args, ns) {
+    for (const sys of subsystems) {
+        if (sys.status === 'RUNNING' && sys.shouldTail) {
+            ns.tail(sys.filename, sys.host, ...sys.scriptInfo.args);
+        }
+    }
 }
 
 /**

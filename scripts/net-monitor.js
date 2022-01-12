@@ -1,34 +1,8 @@
-import {
-    getPlayerInfo,
-    getPoolFromServers,
-    getAllServerObjects,
-    printfSeverAsTarget,
-    printfServer,
-    printItemsNColumns,
-    updateAttackStatus,
-    pad,
-    boxdraw,
-    percentToGraph,
-    C2Command,
-    Server,
-    readC2messages,
-    SubSystem,
-} from '/scripts/bit-lib.js';
+import { getPlayerInfo, getPoolFromServers, getAllServerObjects, printfSeverAsTarget } from '/scripts/bit-lib.js';
+import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
+import { pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
 
 /**@typedef{import('/scripts/index.js').NS} NS */
-
-export const subsystems = [
-    //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', 'daemon.js', 'home'),
-    new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home'),
-    new SubSystem('stats', 'stats.js', 'home'),
-    new SubSystem('hacknet-upgrade-manager', 'hacknet-upgrade-manager.js', 'home'),
-    new SubSystem('stockmaster', 'stockmaster.js', 'home'),
-    new SubSystem('gangs', 'gangs.js', 'home'),
-    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
-];
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];
 const displayTargets = ['net-hack'];
@@ -180,123 +154,77 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     } else if (logType.endsWith('3Up')) {
         printColumns = (data) => printItemsNColumns(data, 3, ns.print);
     }
+    let print1Column = (data) => printItemsNColumns(data, 1, ns.print);
 
+    let thirtySecondsAgo = ns.getTimeSinceLastAug() - 30000;
     let targets = Object.values(servers);
-    targets = targets.filter((s) => s.targetedBy.hack > 0 || s.targetedBy.grow > 0 || s.targetedBy.weaken > 0);
-    targets.sort((t) => t.name);
+    // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
+    targets = targets.filter(
+        (s) =>
+            s.lastTimeSeenTargetedBy.hack > thirtySecondsAgo ||
+            s.lastTimeSeenTargetedBy.grow > thirtySecondsAgo ||
+            s.lastTimeSeenTargetedBy.weaken > thirtySecondsAgo
+    );
+    let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > thirtySecondsAgo);
+    let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= thirtySecondsAgo);
 
-    let hackTargets = targets.filter((t) => t.targetedBy.hack !== 0);
-    let prepTargets = targets.filter((t) => t.targetedBy.hack === 0);
+    let cmpByTotalAttackThreads = function (a, b) {
+        let at = a.targetedBy.hack + a.targetedBy.weaken + a.targetedBy.grow;
+        let bt = b.targetedBy.hack + b.targetedBy.weaken + b.targetedBy.grow;
+        return at - bt;
+    };
+    let cmpByMaxMoney = function (a, b) {
+        let am = a.maxMoney;
+        let bm = b.maxMoney;
+        return am - bm;
+    };
+    /** @param{Server} a */
+    let cmpByCurrentMoney = function (a, b) {
+        let am = a.currentMoney;
+        let bm = b.currentMoney;
+        return am - bm;
+    };
+    // Get our hack and prep lists sorted
+    hackTargets.sort(cmpByMaxMoney).reverse();
+    prepTargets.sort(cmpByCurrentMoney).reverse();
 
-    if (logType.includes('Targets')) {
-        // === TARGET DETAIL ===
-        // --- Hacking ---
-        ns.print(`Hacking ${hackTargets.length} Targets: `);
-        //ns.print(`    ${hackTargets.map((target) => target.name).join(', ')}`);
-        for (const target of hackTargets) {
-            let data = printfSeverAsTarget(target, ns);
-            lines.push(data);
-        }
-        printColumns(lines);
-        lines = [];
+    /* Let's try to get organized. Each section is an array of already-formatted lines. 
+       Generate all of them first, then print them at the end based on what's populated 
+       and what our logType calls for. */
+    /**@type{Object.<string, string[][]>} */
+    let sections = {
+        hackTargets: [],
+        prepTargets: [],
+        allServers: [],
+        home: [],
+        subsystems: [],
+        swarmStatus: [],
+        targetStatus: [],
+    };
 
-        // --- Prepping ---
-        ns.print(`Preparing ${prepTargets.length} targets for attack:`);
-        for (const target of prepTargets) {
-            let data = printfSeverAsTarget(target, ns);
-            lines.push(data);
-        }
-        if (hackTargets.length > 4) {
-            ns.print(`    ${prepTargets.map((target) => target.name).join(', ')}`);
-        } else {
-            printColumns(lines);
-        }
-        lines = [];
+    // === TARGET DETAIL ===
+    //  --- Hacking ---
+    //ns.print(`    ${hackTargets.map((target) => target.name).join(', ')}`);
+    for (const target of hackTargets) {
+        let data = printfSeverAsTarget(target, ns);
+        sections.hackTargets.push(data);
     }
-
-    if (logType.includes('Servers')) {
-        // === SERVER DETAIL ===
-        for (const servername in servers) {
-            let server = servers[servername];
-            let lines = printfServer(server, ns);
-            lines.push(lines);
-        }
-        printColumns(lines);
+    if (hackTargets.length === 0) sections.hackTargets.push(['', '', '']);
+    //  --- Prepping ---
+    for (const target of prepTargets) {
+        let data = printfSeverAsTarget(target, ns);
+        sections.prepTargets.push(data);
     }
-
-    if (logType === 'Short') {
-        // === "SHORT" ---
-        // --- HOME DATA ---
-        let lines = [];
-        let server = servers['home'];
-        let ram = ns.nFormat(server.ram * Math.pow(10, 9), '0 b');
-        let free = ns.nFormat(server.freeRam * Math.pow(10, 9), '0 b');
-        let pctUsed = (server.ram - server.freeRam) / server.ram;
-        // Let's display the percent in used in 5 characters, plus 2 more for brackets
-        let progressbar = percentToGraph(pctUsed, '      ');
-        ram = pad('      ', ram, true);
-
-        let cores = `Cores `;
-        cores += Array(server.cores + 1).join('■');
-        cores = pad('                      ', cores);
-        lines.push(`${cores}            ${ram} ${progressbar}▏`);
-
-        // --- Purchased Servers ---
-        let purchasedServers = Object.values(servers).filter((s) => s.isPurchasedServer);
-        let num = purchasedServers.length;
-
-        ram = purchasedServers.reduce((sum, server) => sum + server.ram, 0);
-        free = purchasedServers.reduce((sum, server) => sum + server.freeRam, 0);
-        pctUsed = (ram - free) / ram;
-
-        progressbar = percentToGraph(pctUsed, '      ');
-        ram = ns.nFormat(ram * Math.pow(10, 9), '0 b');
-        ram = pad('      ', ram, true);
-
-        free = ns.nFormat(free * Math.pow(10, 9), '0 b');
-        free = pad('      ', free, true);
-        if (num > 0) {
-            let symbols = purchasedServers.map((s) => s.symbol).join('');
-            symbols = pad('                         ', symbols);
-            lines.push(`Servers ${symbols} ${ram} ${progressbar}▏`);
-        }
-        lines = boxdraw(lines, 'Home', insideWidth);
-        printItemsNColumns([lines], 1, ns.print);
-        lines = [];
-
-        // --- RUNNING PROGRAMS ---
-        ns.print('');
-        // Let's only care about the running systems.
-        let runningSubsystems = subsystems.filter((s) => s.status === 'RUNNING');
-        runningSubsystems.sort((a, b) => a.scriptInfo.onlineMoneyMade - b.scriptInfo.onlineMoneyMade).reverse();
-
-        // Pad out the subsystem name display to fit the longest name in a neat column.
-        let namePadLen = 21;
-
-        let namePad = Array(namePadLen + 1).join(' ');
-
-        for (const system of runningSubsystems) {
-            let script = system.scriptInfo;
-            let income = '';
-            let cps = '';
-            if (script.onlineMoneyMade !== 0) {
-                income = ns.nFormat(script.onlineMoneyMade, '$0.0a');
-                income = `${pad('       ', income, true)}`;
-                cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, '$0a');
-                cps = `(${cps}/s)`;
-            }
-            let name = pad(namePad, system.name);
-            let size = ns.nFormat(script.ramUsage * Math.pow(10, 9), '0.00 b');
-            size = pad('       ', size, true);
-            let line = `${name} ${size}  ${income} ${cps}`;
-            lines.push(line);
-        }
-        lines = boxdraw(lines, 'Running subsystems', insideWidth);
-        printItemsNColumns([lines], 1, ns.print);
-        lines = [];
+    if (prepTargets.length === 0) sections.prepTargets.push(['', '', '']);
+    // === SERVER DETAIL ===
+    for (const servername in servers) {
+        let server = servers[servername];
+        let data = printfServer(server, ns);
+        sections.allServers.push(data);
     }
-
-    // === SHARED ===
+    // === HOME DATA ===
+    sections.home.push(formatHomeSection(servers, ns, insideWidth));
+    sections.subsystems.push(formatSubsystemSection(ns, insideWidth));
     // --- SWARM STATUS ---
     // get information about the current pool of workers, and reformat everything as pretty strings.
     let pool = getPoolFromServers(servers, ns);
@@ -310,18 +238,127 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     const free = pad(Array(5).join(' '), pool.free, true);
     const running = pad(Array(5).join(' '), pool.running, true);
 
-    // Shared summary trailer.
-    ns.print('');
+    // --- Swarm status ---
     lines = [
-        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}▏`,
+        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`,
         `  Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`,
     ];
-    let swarmStats = [];
-    swarmStats.push(boxdraw(lines, 'Swarm Status', insideWidth));
+    let data = boxdraw(lines, 'Swarm Status', insideWidth);
+    sections.swarmStatus.push(data);
 
+    // --- Target Summary ---
     lines = [`  Being Hacked: ${hackTargets.length}, Being Prepared: ${prepTargets.length}`];
-    swarmStats.push(boxdraw(lines, 'Target Summary', insideWidth));
+    data = boxdraw(lines, 'Target Summary', insideWidth);
+    sections.targetStatus.push(data);
 
+    // === PRINT SECTIONS ===
+    if (logType.includes('Targets')) {
+        let hackTargetsThreadCount = hackTargets
+            .map((t) => t.targetedBy)
+            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let prepTargetsThreadCount = prepTargets
+            .map((t) => t.targetedBy)
+            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let hackThreadCount = ns.nFormat(hackTargetsThreadCount, '0,000.0a');
+        let prepThreadCount = ns.nFormat(prepTargetsThreadCount, '0,000.0a');
+        ns.print(`Hacking ${hackTargets.length} targets, using ${hackThreadCount} threads: `);
+        printColumns(sections.hackTargets);
+
+        ns.print(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
+        if (hackTargets.length > 4) {
+            ns.print(`    ${prepTargets.map((target) => target.name).join(', ')}`);
+        } else {
+            printColumns(sections.prepTargets);
+        }
+    }
+    if (logType.includes('Servers')) {
+        printColumns(sections.allServers);
+    }
+    if (logType === 'Short') {
+        // === "SHORT" ---
+    }
+
+    // === SHARED ===
     ns.print('');
-    printColumns(swarmStats);
+    // Combine the home and subsystem sections into one.
+    let home = [[...sections.home[0], ...sections.subsystems[0]]];
+    // Combine swarm and target into one
+    let swarm = [[...sections.swarmStatus[0], ...sections.targetStatus[0]]];
+
+    // Then merge them so we can print them columnwise
+    let summary = [home[0], swarm[0]];
+    printColumns(summary);
+}
+
+function formatSubsystemSection(ns, insideWidth) {
+    let runningSubsystems = subsystems.filter((s) => s.status === 'RUNNING');
+    runningSubsystems.sort((a, b) => a.scriptInfo.onlineMoneyMade - b.scriptInfo.onlineMoneyMade).reverse();
+
+    // Pad out the subsystem name display to fit in a neat column.
+    let namePadLen = 21;
+    let namePad = Array(namePadLen + 1).join(' ');
+    let lines = [];
+
+    for (const system of runningSubsystems) {
+        let script = system.scriptInfo;
+        let income = '';
+        let cps = '';
+        if (script.onlineMoneyMade !== 0) {
+            income = ns.nFormat(script.onlineMoneyMade, '$0.0a');
+            income = `${pad('       ', income, true)}`;
+            cps = ns.nFormat(script.onlineMoneyMade / script.onlineRunningTime, '$0a');
+            cps = `(${cps}/s)`;
+        }
+        let name = pad(namePad, system.name);
+        let size = ns.nFormat(script.ramUsage * Math.pow(10, 9), '0.00 b');
+        size = pad('       ', size, true);
+        let line = `${name} ${size}  ${income} ${cps}`;
+        lines.push(line);
+    }
+    return boxdraw(lines, 'Running subsystems', insideWidth);
+}
+
+/**
+ * create a fancy box display with home and purchased server info.
+ * @param {Object.<string, Server>} servers
+ * @param {NS} ns
+ * @param {number} insideWidth
+ * @returns string[] lines
+ */
+function formatHomeSection(servers, ns, insideWidth) {
+    let lines = [];
+    let server = servers['home'];
+    let ram = ns.nFormat(server.ram * Math.pow(10, 9), '0 b');
+    let free = ns.nFormat(server.freeRam * Math.pow(10, 9), '0 b');
+    let pctUsed = (server.ram - server.freeRam) / server.ram;
+    // Let's display the percent in used in 5 characters, plus 2 more for brackets
+    let progressbar = percentToGraph(pctUsed, '      ');
+    ram = pad('      ', ram, true);
+
+    let cores = `Cores `;
+    cores += Array(server.cores + 1).join('■');
+    cores = pad('                      ', cores);
+    lines.push(`${cores}            ${ram} ${progressbar}`);
+
+    // --- Purchased Servers ---
+    let purchasedServers = Object.values(servers).filter((s) => s.isPurchasedServer);
+    let num = purchasedServers.length;
+
+    ram = purchasedServers.reduce((sum, server) => sum + server.ram, 0);
+    free = purchasedServers.reduce((sum, server) => sum + server.freeRam, 0);
+    pctUsed = (ram - free) / ram;
+
+    progressbar = percentToGraph(pctUsed, '      ');
+    ram = ns.nFormat(ram * Math.pow(10, 9), '0 b');
+    ram = pad('      ', ram, true);
+
+    free = ns.nFormat(free * Math.pow(10, 9), '0 b');
+    free = pad('      ', free, true);
+    if (num > 0) {
+        let symbols = purchasedServers.map((s) => s.symbol).join('');
+        symbols = pad('                         ', symbols);
+        lines.push(`Servers ${symbols} ${ram} ${progressbar}`);
+    }
+    lines = boxdraw(lines, 'Home', insideWidth);
+    return lines;
 }
