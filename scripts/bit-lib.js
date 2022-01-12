@@ -54,7 +54,13 @@ export const subsystems = [
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
-    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.90, '--reserve-percent', 0.75], true),
+    new SubSystem(
+        'host-manager',
+        'host-manager.js',
+        'home',
+        ['-c', '--utilization-trigger', 0.9, '--reserve-percent', 0.75],
+        true
+    ),
 ];
 
 /** @param {NS} ns */
@@ -139,7 +145,12 @@ export function printfSeverAsTarget(server, ns) {
     const hacksRunning = ns.nFormat(server.targetedBy.hack, '0a');
     const growsRunning = ns.nFormat(server.targetedBy.grow, '0a');
     const weakensRunning = ns.nFormat(server.targetedBy.weaken, '0a');
-    let hackFactor = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    let hackFactor = 0;
+    try {
+        hackFactor = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    } catch {
+        hackFactor = server.hackFactor;
+    }
     //let hackFactor = server.hackFactor;
     const amountToBeStolen = hackFactor * server.targetedBy.hack * server.currentMoney;
     let stealing = '';
