@@ -1,11 +1,10 @@
-import { getPlayerInfo, getPoolFromServers, getAllServerObjects, printfSeverAsTarget } from '/scripts/bit-lib.js';
+import { getPlayerInfo, getPoolFromServers, getAllServerObjects, printfSeverAsTarget, C2Command, sendC2message } from '/scripts/bit-lib.js';
 import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
-import { pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
+import { Server, pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 
-const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Servers2Up', 'Servers3Up'];
-const displayTargets = ['net-hack'];
+const displayTypes = ['Short', 'Targets1Up', 'Targets2Up'];
 
 // Let's try to replicate all of the fancy monitoring and logging from net-hack.js here.
 // That way we can move it out of net-hack.js and use that log for actual debugging.
@@ -15,16 +14,11 @@ export async function main(ns) {
     let args = ns.flags([
         ['start', false],
         ['stop', false],
-        ['display', 'Short'],
-        ['target', 'net-hack'],
+        ['display', 'default'],
     ]);
 
-    if (displayTypes.findIndex((e) => e == args.display) == -1) {
+    if (displayTypes.findIndex((e) => e === args.display) === -1 && args.display !== 'default') {
         ns.tprint(`Invalid display type. Valid display types are: ${displayTypes}.`);
-        return;
-    }
-    if (displayTargets.findIndex((e) => e == args.target) == -1) {
-        ns.tprint(`Invalid monitoring target. Valid targets are: ${displayTargets}.`);
         return;
     }
 
@@ -40,7 +34,6 @@ export async function main(ns) {
 				--stop to end all monitoring.	
 			Optional:
 				--display ${displayTypes}
-				--target ${displayTargets}
 			`;
         ns.tprint(msg);
         return;
@@ -48,7 +41,7 @@ export async function main(ns) {
 }
 
 /** @param {NS} ns */
-async function runDisplayLoop(displayTarget, displayType, ns) {
+async function runDisplayLoop(displayTarget, _displayType, ns) {
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
     ns.disableLog('getServerUsedRam');
@@ -60,13 +53,13 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
     ns.disableLog('sleep');
     ns.disableLog('asleep');
 
+    let displayType = _displayType;
+    if (displayType === 'default') displayType = 'Short';
+
     /** @type {Object.<string,Server} */
     let servers = {};
-    /** @type {Server[]} */
-    let targets = [];
     /** @type {import('./bit-lib.js').Player} */
     let playerInfo = {};
-    let processesToMonitor = [];
 
     ns.tail();
     let lastlog = ``;
@@ -81,11 +74,12 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
         on100 = ++on100 % 100;
 
         if (on10 == 1) {
-            // Read our C2 messages.
+            // Read our C2 messages. We're doing it inline so that we can update locals more easily.
             let inbox = await readC2messages('net-monitor', ns);
             for (const msg of inbox) {
-                if (msg.subtype === 'C2Command' && msg.action === 'set') {
-                    if (msg.key === 'display') {
+                let requeue = true;
+                if (msg instanceof C2Command && msg.action === 'set') {
+                    if (msg.key === 'display' && _displayType === 'default') {
                         if (msg.value === 'next') {
                             let i = displayTypes.findIndex((t) => t === displayType);
                             i = ++i % displayTypes.length;
@@ -94,8 +88,11 @@ async function runDisplayLoop(displayTarget, displayType, ns) {
                             let newDisplayType = displayTypes.find((t) => t.toLowerCase() === msg.value.toLowerCase());
                             if (newDisplayType) displayType = newDisplayType;
                         }
+                        requeue = false;
                     }
                 }
+                // If we didn't handle the message, put it back on the c2 queue.
+                if (requeue) await sendC2message(msg, ns);
             }
         }
 
@@ -142,7 +139,6 @@ function runStop(ns) {
  */
 export function printFancyLog(servers, logType, playerInfo, ns) {
     ns.clearLog(...ns.args);
-    const defaultWidth = 52;
     const insideWidth = 48;
 
     let lines = [];
@@ -185,8 +181,8 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         return am - bm;
     };
     // Get our hack and prep lists sorted
-    hackTargets.sort(cmpByMaxMoney).reverse();
-    prepTargets.sort(cmpByCurrentMoney).reverse();
+    hackTargets.sort(cmpByTotalAttackThreads).reverse();
+    prepTargets.sort(cmpByTotalAttackThreads).reverse();
 
     /* Let's try to get organized. Each section is an array of already-formatted lines. 
        Generate all of them first, then print them at the end based on what's populated 
@@ -253,41 +249,86 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
 
     // === PRINT SECTIONS ===
     if (logType.includes('Targets')) {
+        // Limit the display to 4 lines, else it gets too big.
+        let topN = 4;
+        if (logType.includes('2Up')) topN = 8;
+        let topHackTargets = hackTargets.slice(0, topN);
+        let otherHackTargets = hackTargets.slice(topN, hackTargets.length);
+        // Use a more stable sort for this bit, so they don't go moving around all the time.
+        // otherHackTargets.sort(cmpByTotalAttackThreads).reverse();
+
         let hackTargetsThreadCount = hackTargets
+            .map((t) => t.targetedBy)
+            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let topHackTargetsThreadCount = topHackTargets
+            .map((t) => t.targetedBy)
+            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let otherHackTargetsThreadCount = otherHackTargets
             .map((t) => t.targetedBy)
             .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
         let prepTargetsThreadCount = prepTargets
             .map((t) => t.targetedBy)
             .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
-        let hackThreadCount = ns.nFormat(hackTargetsThreadCount, '0,000.0a');
-        let prepThreadCount = ns.nFormat(prepTargetsThreadCount, '0,000.0a');
-        ns.print(`Hacking ${hackTargets.length} targets, using ${hackThreadCount} threads: `);
-        printColumns(sections.hackTargets);
 
-        ns.print(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
-        if (hackTargets.length > 4) {
-            ns.print(`    ${prepTargets.map((target) => target.name).join(', ')}`);
-        } else {
-            printColumns(sections.prepTargets);
+        let topHackThreadCount = ns.nFormat(topHackTargetsThreadCount, '0.0a');
+        let otherHackThreadCount = ns.nFormat(otherHackTargetsThreadCount, '0.0a');
+        let prepThreadCount = ns.nFormat(prepTargetsThreadCount, '0.0a');
+
+        // Print the top N targets
+        ns.print(`Hacking top ${topHackTargets.length} targets, using ${topHackThreadCount} threads: `);
+        printColumns(sections.hackTargets.slice(0, topN));
+
+        let overflowsection = [];
+        // And a summary of the rest.
+        if (hackTargets.length > topN) {
+            let targetTitle = `Hacking ${otherHackTargets.length} more targets, using ${otherHackThreadCount} threads`;
+            let targetstr = otherHackTargets.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
+            // Even this summary gets long if there are more than about 10 in this list.
+            if (otherHackTargets.length > 10) {
+                let shortlist = otherHackTargets.slice(0,8);
+                let rest = otherHackTargets.slice(8, otherHackTargets.length);
+                let restThreads = ns.nFormat(rest.map((server)=>server.targetedBy.total).reduce((sum, threads) => sum+threads, 0), '0a');
+                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
+                shortnames += `, and ${rest.length} more using ${restThreads} threads.`
+                targetstr = shortnames;                
+            }
+            let boxedstr = boxdraw([targetstr], targetTitle, insideWidth, true);
+            overflowsection.push(boxedstr);
         }
+
+        if (hackTargets.length + prepTargets.length <= 6) {
+            ns.print(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
+            printColumns(prepTargets);
+        } else {
+            let title = `Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads`;
+            let prepstr = prepTargets.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join(', ');
+            // Even this summary gets long if there are more than about 10 in this list.
+            if (prepTargets.length > 10) {
+                let shortlist = prepTargets.slice(0,8);
+                let rest = prepTargets.slice(8, prepTargets.length);
+                let restThreads = ns.nFormat(rest.map((server)=>server.targetedBy.total).reduce((sum, threads) => sum+threads, 0), '0a');
+                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
+                shortnames += `, and ${rest.length} more using ${restThreads} threads.`
+                prepstr = shortnames;                
+            }
+            let boxedstr = boxdraw([prepstr], title, insideWidth, true);
+            overflowsection.push(boxedstr);
+        }
+        if (overflowsection.length > 0) {
+            printColumns(overflowsection);
+        }
+        let swarm = [sections.swarmStatus[0], sections.targetStatus[0]];
+        printColumns(swarm);
+
     }
     if (logType.includes('Servers')) {
         printColumns(sections.allServers);
     }
     if (logType === 'Short') {
-        // === "SHORT" ---
+        print1Column([sections.home, sections.subsystems, sections.swarmStatus, sections.targetStatus].flat(1));
     }
 
-    // === SHARED ===
-    ns.print('');
-    // Combine the home and subsystem sections into one.
-    let home = [[...sections.home[0], ...sections.subsystems[0]]];
-    // Combine swarm and target into one
-    let swarm = [[...sections.swarmStatus[0], ...sections.targetStatus[0]]];
-
-    // Then merge them so we can print them columnwise
-    let summary = [home[0], swarm[0]];
-    printColumns(summary);
+    // Print any common trailer stuff here.
 }
 
 function formatSubsystemSection(ns, insideWidth) {
@@ -335,8 +376,9 @@ function formatHomeSection(servers, ns, insideWidth) {
     let progressbar = percentToGraph(pctUsed, '      ');
     ram = pad('      ', ram, true);
 
-    let cores = `Cores `;
-    cores += Array(server.cores + 1).join('■');
+    let cores = `Cores `;                 
+    cores += Array(server.cores + 1).join('▪');
+    let t = '■■■■■■';
     cores = pad('                      ', cores);
     lines.push(`${cores}            ${ram} ${progressbar}`);
 

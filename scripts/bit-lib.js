@@ -47,20 +47,14 @@ export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
     new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s'], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], true),
-    new SubSystem('stats', 'stats.js', 'home'),
+//    new SubSystem('stats', 'stats.js', 'home'),
     new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], true),
     new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
     new SubSystem('gangs', 'gangs.js', 'home'),
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
-    new SubSystem(
-        'host-manager',
-        'host-manager.js',
-        'home',
-        ['-c', '--utilization-trigger', 0.9, '--reserve-percent', 0.75],
-        true
-    ),
+    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.9, '--reserve-percent', 0.75], true),
 ];
 
 /** @param {NS} ns */
@@ -307,8 +301,8 @@ export function updateAttackStatus(_servers, ns) {
     let servers = Object.values(_servers);
     // Reset our counts.
     for (const server of servers) {
-        server.running = { grow: 0, hack: 0, weaken: 0 };
-        server.targetedBy = { grow: 0, hack: 0, weaken: 0 };
+        server.running = new Threadcount();
+        server.targetedBy = new Threadcount();
     }
 
     // Server.running and Server.targetedBy need to know what's running on all the servers.
@@ -399,18 +393,25 @@ function splitNWays(items, n) {
  */
 export function printItemsNColumns(items, n, printfn) {
     if (items.length === 0) return;
+    if (items.length === 1 && items[0].length===0) return;
     /** @type{string[][][]} */
     let columns = splitNWays(items, n);
+    
 
     // Now columns[0] is is a list of items to print in column 0, etc.
     // Since we want to print by rows, let's transpose the array
     let rows = columns[0].map((_, colIndex) => columns.map((row) => row[colIndex]));
     for (const row of rows) {
         // row is now an Array of n items, with each item being an Array of strings to print.
-        for (let i = 0; i < row[0].length; i++) {
+        let numrows = 0;
+        try {
+            numrows = Math.max(...row.map((item) => item.length));
+        }
+        catch { /*pass*/ }
+        for (let i = 0; i < numrows; i++) {
             let line = row.map((item) => {
                 if (item && item.length > i) return item[i];
-                else return '';
+                else return Array(item[0].length+1).join(' ');
             });
             // line is now an Array of strings, which just need to be joined and printed.
             printfn(line.join('   '));
@@ -538,6 +539,17 @@ const PurchasedServerNames = [
     'daemon',
 ];
 
+class Threadcount {
+    constructor(hack = 0, grow = 0, weaken = 0) {
+        this.hack = hack;
+        this.grow = grow;
+        this.weaken = weaken;
+    }
+    get total() {
+        return this.hack + this.grow + this.weaken;
+    }
+}
+
 export class Server {
     /**
      * Creates an instance of Server.
@@ -548,10 +560,10 @@ export class Server {
     constructor(servername, ns) {
         this.name = servername;
         this.update(ns);
-        this.running = { hack: 0, grow: 0, weaken: 0 };
-        this.targetedBy = { hack: 0, grow: 0, weaken: 0 };
-        this.lastTimeSeenTargetedBy = { hack: 0, grow: 0, weaken: 0 };
-        this.desired = { hack: 0, grow: 0, weaken: 0 };
+        this.running = new Threadcount();
+        this.targetedBy = new Threadcount();
+        this.lastTimeSeenTargetedBy = new Threadcount();
+        this.desired = new Threadcount();
         this.isPurchasedServer = false;
         // Let's not actually call ns.getPurchasedServers. That's expensive! Just check for our common server names.
         let basename = this.name.split('-')[0];
@@ -589,7 +601,6 @@ export class Server {
         this.levelRequired = ns.getServerRequiredHackingLevel(servername);
     }
 }
-
 /**
  * Wrap a string, returning an array of strings, wrapped to the specified length..
  * @param {string} long_string
@@ -597,70 +608,21 @@ export class Server {
  * @returns {string[]}
  */
 export function wordwrap(long_string, max_char) {
-    var sum_length_of_words = function (word_array) {
-        var out = 0;
-        if (word_array.length != 0) {
-            for (var i = 0; i < word_array.length; i++) {
-                var word = word_array[i];
-                out = out + word.length;
-            }
-        }
-        return out;
-    };
+    let words = long_string.split(' ');
+    let lines = [];
+    let line = '';
+    while (words.length > 0) {
+        let word = words.shift();
 
-    var chunkString = function (str, length) {
-        return str.match(new RegExp('.{1,' + length + '}', 'g'));
-    };
-
-    var splitLongWord = function (word, maxChar) {
-        var out = [];
-        if (maxChar >= 1) {
-            var wordArray = chunkString(word, maxChar - 1); // just one under maxChar in order to add the innerword separator '-'
-            if (wordArray.length >= 1) {
-                // Add every piece of word but the last, concatenated with '-' at the end
-                for (var i = 0; i < wordArray.length - 1; i++) {
-                    var piece = wordArray[i] + '-';
-                    out.push(piece);
-                }
-                // finally, add the last piece
-                out.push(wordArray[wordArray.length - 1]);
-            }
-        }
-        // If nothing done, just use the same word
-        if (out.length == 0) {
-            out.push(word);
-        }
-        return out;
-    };
-
-    var split_out = [[]];
-    var split_string = long_string.split(' ');
-    for (var i = 0; i < split_string.length; i++) {
-        var word = split_string[i];
-
-        // If the word itself exceed the max length, split it,
-        if (word.length > max_char) {
-            var wordPieces = splitLongWord(word, max_char);
-            for (var i = 0; i < wordPieces.length; i++) {
-                var wordPiece = wordPieces[i];
-                split_out = split_out.concat([[]]);
-                split_out[split_out.length - 1] = split_out[split_out.length - 1].concat(wordPiece);
-            }
-        } else {
-            // otherwise add it if possible
-            if (sum_length_of_words(split_out[split_out.length - 1]) + word.length > max_char) {
-                split_out = split_out.concat([[]]);
-            }
-
-            split_out[split_out.length - 1] = split_out[split_out.length - 1].concat(word);
-        }
+        if (line.length + 1 + word.length > max_char) {
+            lines.push(line);
+            line = '';
+        } 
+        if (line === '') line = word;
+        else line += ' ' + word;
     }
-
-    for (var i = 0; i < split_out.length; i++) {
-        split_out[i] = split_out[i].join(' ');
-    }
-
-    return split_out;
+    if (line.length > 0) lines.push(line);
+    return lines;
 }
 
 /**

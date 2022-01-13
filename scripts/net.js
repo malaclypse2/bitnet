@@ -99,18 +99,17 @@ async function runStartCommand(host, args, ns) {
     await runMonitorCommand(host, args, ns);
 
     // Start the host manager
-    let subsystem = subsystems.find((s)=>s.name === 'host-manager');
-    if(subsystem.status === 'STOPPED') {
+    let subsystem = subsystems.find((s) => s.name === 'host-manager');
+    if (subsystem.status === 'STOPPED') {
         ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
-    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`)
+    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
 
     // Start the daemon in if it's not running. Must do this last, if we use spawn instead of exec.
-    subsystem = subsystems.find((s)=>s.name === 'daemon');
-    if(subsystem.status === 'STOPPED') {
+    subsystem = subsystems.find((s) => s.name === 'daemon');
+    if (subsystem.status === 'STOPPED') {
         //ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
         ns.spawn(subsystem.filename, 1, ...subsystem.defaultargs);
-    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`)
-    
+    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
 }
 
 /**
@@ -120,7 +119,7 @@ async function runStartCommand(host, args, ns) {
  * @param {*} args - flags passed in from the command line.
  * @param {NS} ns
  */
- async function runTailCommand(_host, args, ns) {
+async function runTailCommand(_host, args, ns) {
     for (const sys of subsystems) {
         if (sys.status === 'RUNNING' && sys.shouldTail) {
             ns.tail(sys.filename, sys.host, ...sys.scriptInfo.args);
@@ -232,8 +231,13 @@ async function runMonitorCommand(host, args, ns) {
         if (args._.length > 0) {
             // Broadcast to the monitor app.
             let display = args._.shift();
-            let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
-            await sendC2message(cmd, ns);
+            // if the next argument is 'lock', 'new', or 'start' then start a new monitor thread instead of switching the main one.
+            if (args._.length > 0 && ['lock', 'start', 'new'].includes(args._[0])) {
+                ns.exec('/scripts/net-monitor.js', host, 1, '--start', '--display', display);
+            } else {
+                let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
+                await sendC2message(cmd, ns);
+            }
         }
     }
 }
@@ -278,7 +282,7 @@ async function runServersCommand(host, args, ns) {
                 for (let i = 0; i < num; i++) {
                     ns.exec(script_server, host, 1, '--buy', siz);
                 }
-        } else {
+            } else {
                 let msg = `Unknown arguments to net server buy: '${args._.join(
                     ' '
                 )}' expected net server buy [num] siz`;
@@ -323,6 +327,3 @@ async function runBackdoorCommand(host, args, ns) {
     ns.tprint(`Backdooring all systems. `);
     ns.exec('/scripts/net-backdoor', host, 1);
 }
-
-
-
