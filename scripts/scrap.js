@@ -1,6 +1,6 @@
 /** @typedef {import('/scripts/index.js').NS} NS */
 
-import { pad, percentToGraph } from '/scripts/bit-lib.js';
+import { wordwrap } from '/scripts/bit-lib.js';
 
 /**@param {NS} ns */
 export async function main(ns) {
@@ -14,11 +14,9 @@ export async function main(ns) {
 	// 	ns.tprint(line);
 	// }
 
-	let server = {
-		hackDifficulty: 5,
-		requiredHackingSkill: 400
+	let line = 'one one-two one-two-three one-two-three-four one-two-three-four-five-six-sever-eight-nine-ten-eleven'
+	let lines = wordwrap(line, 20);
+	for (let l of lines){
+		ns.tprint(l);
 	}
-	let playerStats = ns.getPlayer();
-	ns.tprint(ns.formulas.hacking.hackPercent(server, playerStats)); // hackAnalyzePercent(this.name) / 100;
-
 }

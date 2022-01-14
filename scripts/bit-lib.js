@@ -18,6 +18,7 @@ export class SubSystem {
         this.shouldTail = shouldTail;
         this.defaultargs = defaultargs;
         this.status = 'UNKNOWN';
+        this.lastSeenRunning = 0;
         /** @type {import("/scripts/index.js").ProcessInfo} */
         this.process = {};
         /** @type {import("/scripts/index.js").RunningScript} */
@@ -35,6 +36,7 @@ export class SubSystem {
             let isSystemScript = this.filename === process.filename;
             if (isSystemScript) {
                 this.status = 'RUNNING';
+                this.lastSeenRunning = Date.now();
                 this.process = process;
                 this.scriptInfo = ns.getRunningScript(this.filename, this.host, ...process.args);
                 break;
@@ -54,7 +56,7 @@ export const subsystems = [
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
     new SubSystem('work-for-factions', 'work-for-factions.js', 'home'),
-    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.9, '--reserve-percent', 0.75], true),
+    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'], true),
 ];
 
 /** @param {NS} ns */
@@ -324,7 +326,7 @@ export function updateAttackStatus(_servers, ns) {
                 server.running[procType] += proc.threads;
                 let target = servers.find((s) => s.name === proc.args[0]);
                 target.targetedBy[procType] += proc.threads;
-                target.lastTimeSeenTargetedBy[procType] = ns.getTimeSinceLastAug();
+                target.lastTimeSeenTargetedBy[procType] = Date.now();
             }
         }
     }
@@ -473,7 +475,7 @@ export class C2Message {
         this.action = action;
         this.key = key;
         this.value = value;
-        if (ns) this.createtime = ns.getTimeSinceLastAug();
+        if (ns) this.createtime = Date.now();
         else this.createtime = 0;
     }
     static fromObject(obj) {
@@ -613,8 +615,19 @@ export function wordwrap(long_string, max_char) {
     let line = '';
     while (words.length > 0) {
         let word = words.shift();
-
         if (line.length + 1 + word.length > max_char) {
+            // See if there's a hyphen in the word, and if we could split it there to fit.
+            let splitword = word.split('-');
+            for (let i = splitword.length; i > 0 ; i--) {
+                let partial = splitword.slice(0,i).join('-')+'-';
+                let remainder = splitword.slice(i).join('-');
+                if (line.length + 1 + partial.length <= max_char) {
+                    // This partial word fits!
+                    line += ' ' + partial;
+                    word = remainder;
+                    continue;
+                }
+            }
             lines.push(line);
             line = '';
         } 
@@ -654,7 +667,7 @@ export async function readC2messages(system, ns) {
             inbox.push(msg);
             // ns.tprint(`C2 Message recieved for '${system}': ${JSON.stringify(msg)}`);
         } else {
-            let expiryTime = ns.getTimeSinceLastAug() - 90 * 1000;
+            let expiryTime = Date.now() - 90 * 1000;
             if (msg.createtime > expiryTime) {
                 await sendC2message(msg, ns);
             }

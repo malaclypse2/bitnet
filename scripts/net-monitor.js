@@ -1,4 +1,11 @@
-import { getPlayerInfo, getPoolFromServers, getAllServerObjects, printfSeverAsTarget, C2Command, sendC2message } from '/scripts/bit-lib.js';
+import {
+    getPlayerInfo,
+    getPoolFromServers,
+    getAllServerObjects,
+    printfSeverAsTarget,
+    C2Command,
+    sendC2message,
+} from '/scripts/bit-lib.js';
 import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
 import { Server, pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
 
@@ -16,6 +23,9 @@ export async function main(ns) {
         ['stop', false],
         ['display', 'default'],
     ]);
+    // case insensitive assignment, because I fumble it on the command line all the time
+    let newDisplayType = displayTypes.find((t) => t.toLowerCase() === args.display.toLowerCase());
+    if (newDisplayType) args.display = newDisplayType;
 
     if (displayTypes.findIndex((e) => e === args.display) === -1 && args.display !== 'default') {
         ns.tprint(`Invalid display type. Valid display types are: ${displayTypes}.`);
@@ -63,6 +73,7 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
 
     ns.tail();
     let lastlog = ``;
+    let factionData;
 
     let on10 = 0,
         on50 = 0,
@@ -99,6 +110,8 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
         if (on100 == 1) {
             // Update our player info.
             playerInfo = getPlayerInfo(ns);
+
+            //factionData = ns.getFactionFavor('${factionName}');
         }
 
         // Get all the servers, including any newly purchased ones, and refresh the data on them.
@@ -110,7 +123,7 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
 
         // Finally, print a fancy log of the current state of play
         printFancyLog(servers, displayType, playerInfo, ns);
-        ns.print(lastlog);
+        if (lastlog) ns.print(lastlog);
         await ns.asleep(100);
     }
 }
@@ -152,7 +165,7 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     }
     let print1Column = (data) => printItemsNColumns(data, 1, ns.print);
 
-    let thirtySecondsAgo = ns.getTimeSinceLastAug() - 30000;
+    let thirtySecondsAgo = Date.now() - 30000;
     let targets = Object.values(servers);
     // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
     targets = targets.filter(
@@ -169,6 +182,12 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         let bt = b.targetedBy.hack + b.targetedBy.weaken + b.targetedBy.grow;
         return at - bt;
     };
+    /**@param {Server} a @param {Server} b*/
+    let cmpByMoneyBeingHacked = function (a,b) {
+        let am = getAmountTargetedToBeHacked(a, ns);
+        let bm = getAmountTargetedToBeHacked(b, ns);
+        return am - bm;
+    }
     let cmpByMaxMoney = function (a, b) {
         let am = a.maxMoney;
         let bm = b.maxMoney;
@@ -181,7 +200,7 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         return am - bm;
     };
     // Get our hack and prep lists sorted
-    hackTargets.sort(cmpByTotalAttackThreads).reverse();
+    hackTargets.sort(cmpByMoneyBeingHacked).reverse();
     prepTargets.sort(cmpByTotalAttackThreads).reverse();
 
     /* Let's try to get organized. Each section is an array of already-formatted lines. 
@@ -196,6 +215,7 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         subsystems: [],
         swarmStatus: [],
         targetStatus: [],
+        factionStatus: [],
     };
 
     // === TARGET DETAIL ===
@@ -247,6 +267,8 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     data = boxdraw(lines, 'Target Summary', insideWidth);
     sections.targetStatus.push(data);
 
+    // === FACTION STATUS ===
+
     // === PRINT SECTIONS ===
     if (logType.includes('Targets')) {
         // Limit the display to 4 lines, else it gets too big.
@@ -255,7 +277,7 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         let topHackTargets = hackTargets.slice(0, topN);
         let otherHackTargets = hackTargets.slice(topN, hackTargets.length);
         // Use a more stable sort for this bit, so they don't go moving around all the time.
-        // otherHackTargets.sort(cmpByTotalAttackThreads).reverse();
+        otherHackTargets.sort(cmpByMaxMoney).reverse();
 
         let hackTargetsThreadCount = hackTargets
             .map((t) => t.targetedBy)
@@ -282,15 +304,24 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         // And a summary of the rest.
         if (hackTargets.length > topN) {
             let targetTitle = `Hacking ${otherHackTargets.length} more targets, using ${otherHackThreadCount} threads`;
-            let targetstr = otherHackTargets.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
+            let targetstr = otherHackTargets
+                .map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`)
+                .join(', ');
             // Even this summary gets long if there are more than about 10 in this list.
             if (otherHackTargets.length > 10) {
-                let shortlist = otherHackTargets.slice(0,8);
+                let shortlist = otherHackTargets.slice(0, 8);
                 let rest = otherHackTargets.slice(8, otherHackTargets.length);
-                let restThreads = ns.nFormat(rest.map((server)=>server.targetedBy.total).reduce((sum, threads) => sum+threads, 0), '0a');
-                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
-                shortnames += `, and ${rest.length} more using ${restThreads} threads.`
-                targetstr = shortnames;                
+                let restThreads = ns.nFormat(
+                    rest.map((server) => server.targetedBy.total).reduce((sum, threads) => sum + threads, 0),
+                    '0a'
+                );
+                let shortnames =
+                    'Including ' +
+                    shortlist
+                        .map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`)
+                        .join(', ');
+                shortnames += `, and ${rest.length} more using ${restThreads} threads.`;
+                targetstr = shortnames;
             }
             let boxedstr = boxdraw([targetstr], targetTitle, insideWidth, true);
             overflowsection.push(boxedstr);
@@ -298,18 +329,27 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
 
         if (hackTargets.length + prepTargets.length <= 6) {
             ns.print(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
-            printColumns(prepTargets);
+            printColumns(sections.prepTargets);
         } else {
             let title = `Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads`;
-            let prepstr = prepTargets.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join(', ');
+            let prepstr = prepTargets
+                .map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`)
+                .join(', ');
             // Even this summary gets long if there are more than about 10 in this list.
             if (prepTargets.length > 10) {
-                let shortlist = prepTargets.slice(0,8);
+                let shortlist = prepTargets.slice(0, 8);
                 let rest = prepTargets.slice(8, prepTargets.length);
-                let restThreads = ns.nFormat(rest.map((server)=>server.targetedBy.total).reduce((sum, threads) => sum+threads, 0), '0a');
-                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join (', ');
-                shortnames += `, and ${rest.length} more using ${restThreads} threads.`
-                prepstr = shortnames;                
+                let restThreads = ns.nFormat(
+                    rest.map((server) => server.targetedBy.total).reduce((sum, threads) => sum + threads, 0),
+                    '0a'
+                );
+                let shortnames =
+                    'Including ' +
+                    shortlist
+                        .map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`)
+                        .join(', ');
+                shortnames += `, and ${rest.length} more using ${restThreads} threads.`;
+                prepstr = shortnames;
             }
             let boxedstr = boxdraw([prepstr], title, insideWidth, true);
             overflowsection.push(boxedstr);
@@ -319,7 +359,6 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         }
         let swarm = [sections.swarmStatus[0], sections.targetStatus[0]];
         printColumns(swarm);
-
     }
     if (logType.includes('Servers')) {
         printColumns(sections.allServers);
@@ -376,7 +415,7 @@ function formatHomeSection(servers, ns, insideWidth) {
     let progressbar = percentToGraph(pctUsed, '      ');
     ram = pad('      ', ram, true);
 
-    let cores = `Cores `;                 
+    let cores = `Cores `;
     cores += Array(server.cores + 1).join('▪');
     let t = '■■■■■■';
     cores = pad('                      ', cores);
@@ -403,4 +442,15 @@ function formatHomeSection(servers, ns, insideWidth) {
     }
     lines = boxdraw(lines, 'Home', insideWidth);
     return lines;
+}
+
+/**
+ * The amount to be hacked from this server, assuming all incoming hack threads hit at max money.
+ * @param {Server} server 
+ * @param {NS} ns 
+ */
+function getAmountTargetedToBeHacked(server, ns){
+    let hf = server.hackFactor;
+    if (ns.ls ('home', "Formulas.exe")) hf = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    return hf * server.targetedBy.hack * server.maxMoney;   
 }

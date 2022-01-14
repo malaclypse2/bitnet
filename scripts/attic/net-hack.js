@@ -285,7 +285,7 @@ function allocateSwarmThreads(servers, targets, player, ns) {
                     server.slots
                 );
                 if (desired > 0) {
-                    let t = ns.getTimeSinceLastAug();
+                    let t = Date.now();
                     let args = [target.name, t];
                     let retval = ns.exec(attackScripts[attackType], server.name, desired, ...args);
                     if (retval > 0) {

@@ -31,7 +31,7 @@ export async function main(ns) {
     // Make sure the target is prepped, and that there are no inbound attacks.
     let wait = prepare(host, target, ns);
     while (wait > 0) {
-        await ns.asleep(wait - ns.getTimeSinceLastAug() + 200);
+        await ns.asleep(wait - Date.now() + 200);
         getAttackStatus(servers, targets, ns);
         wait = prepare(host, target, ns);
     }
@@ -74,7 +74,7 @@ export async function prepare(host, target, ns) {
     desired['weaken'] = Math.ceil(desired['weaken']);
 
     let free = host.slots;
-    let time = ns.getTimeSinceLastAug();
+    let time = Date.now();
     let completetime = 0;
     if (target.targetedBy.hack) {
         completetime = Math.max(ns.getHackTime(target.name), completetime);
@@ -110,7 +110,7 @@ export async function prepare(host, target, ns) {
         // Not enough free space... Maybe there's a bunch of stuff running?
         if (host.ram / worker_size > desired.grow + desired.weaken) {
             ns.print('Waiting for resources.');
-            completetime = ns.getTimeSinceLastAug() + 1000;
+            completetime = Date.now() + 1000;
         } else {
             ns.tprint(`Not enough free space to prepare '${target.name}' from host '${host.name}'.`);
             ns.exit();
@@ -124,7 +124,7 @@ export async function prepare(host, target, ns) {
  * @param {Server} target - Target (becomes args[0])
  * @param {string} script - path to the script
  * @param {number} threads - Number of threads
- * @param {number} time - time to launch (relative to ns.getTimeSinceLastAug())
+ * @param {number} time - time to launch
  * @param {import('.').NS} ns
  * @returns {number} - PID if successful, else 0
  */
