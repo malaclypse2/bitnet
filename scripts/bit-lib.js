@@ -141,12 +141,9 @@ export function printfSeverAsTarget(server, ns) {
     const hacksRunning = ns.nFormat(server.targetedBy.hack, '0a');
     const growsRunning = ns.nFormat(server.targetedBy.grow, '0a');
     const weakensRunning = ns.nFormat(server.targetedBy.weaken, '0a');
-    let hackFactor = 0;
-    try {
+    let hackFactor = server.hackFactor;
+    if(ns.ls('home', 'Formulas.exe').length >0 )
         hackFactor = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
-    } catch {
-        hackFactor = server.hackFactor;
-    }
     //let hackFactor = server.hackFactor;
     const amountToBeStolen = hackFactor * server.targetedBy.hack * server.currentMoney;
     let stealing = '';
