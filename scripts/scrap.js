@@ -14,9 +14,13 @@ export async function main(ns) {
 	// 	ns.tprint(line);
 	// }
 
-	let line = 'one one-two one-two-three one-two-three-four one-two-three-four-five-six-sever-eight-nine-ten-eleven'
-	let lines = wordwrap(line, 20);
-	for (let l of lines){
-		ns.tprint(l);
-	}
+	const self = globalThis;
+	const doc = eval('document');
+
+	//ns.tprint(`self: ${JSON.stringify(self)}`)
+	self.window.
+	ns.tprint('')
+	ns.tprint('')
+	ns.tprint(`doc: ${JSON.stringify(doc)}`)
+
 }

@@ -104,7 +104,13 @@ async function runStartCommand(host, args, ns) {
         ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
     } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
 
-    // Start the daemon in if it's not running. Must do this last, if we use spawn instead of exec.
+    // Start the work manager. TODO: check for source files, free ram, and maybe a better place to run this.
+    subsystem = subsystems.find((s) => s.name === 'work');
+    if (subsystem.status === 'STOPPED') {
+        ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
+    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+
+    // Start the daemon in if it's not running. Must do this last, if we're use spawn instead of exec.
     subsystem = subsystems.find((s) => s.name === 'daemon');
     if (subsystem.status === 'STOPPED') {
         //ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
@@ -122,7 +128,10 @@ async function runStartCommand(host, args, ns) {
 async function runTailCommand(_host, args, ns) {
     for (const sys of subsystems) {
         if (sys.status === 'RUNNING' && sys.shouldTail) {
-            ns.tail(sys.filename, sys.host, ...sys.scriptInfo.args);
+            // check to see if there's another instance running to also pull up (mostly for net-monitor)
+            for (const ps of ns.ps(sys.host)) {
+                if (ps.filename == sys.filename) ns.tail(sys.filename, sys.host, ...ps.args);
+            }
         }
     }
 }

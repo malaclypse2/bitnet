@@ -25,7 +25,7 @@ let names = [
     'Chi(χ)',
     'Psi(Ψ)',
     'Omega(Ω)',
-    'Aleph(א)',
+    'Infinity(∞)',
 ];
 
 /** @param {import('/scripts/index.js').NS} ns */
