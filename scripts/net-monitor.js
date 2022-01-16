@@ -183,11 +183,11 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         return at - bt;
     };
     /**@param {Server} a @param {Server} b*/
-    let cmpByMoneyBeingHacked = function (a,b) {
+    let cmpByMoneyBeingHacked = function (a, b) {
         let am = getAmountTargetedToBeHacked(a, ns);
         let bm = getAmountTargetedToBeHacked(b, ns);
         return am - bm;
-    }
+    };
     let cmpByMaxMoney = function (a, b) {
         let am = a.maxMoney;
         let bm = b.maxMoney;
@@ -318,7 +318,9 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
                 let shortnames =
                     'Including ' +
                     shortlist
-                        .map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`)
+                        .map(
+                            (target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`
+                        )
                         .join(', ');
                 shortnames += `, and ${rest.length} more using ${restThreads} threads.`;
                 targetstr = shortnames;
@@ -446,11 +448,12 @@ function formatHomeSection(servers, ns, insideWidth) {
 
 /**
  * The amount to be hacked from this server, assuming all incoming hack threads hit at max money.
- * @param {Server} server 
- * @param {NS} ns 
+ * @param {Server} server
+ * @param {NS} ns
  */
-function getAmountTargetedToBeHacked(server, ns){
+function getAmountTargetedToBeHacked(server, ns) {
     let hf = server.hackFactor;
-    if (ns.ls ('home', "Formulas.exe")) hf = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
-    return hf * server.targetedBy.hack * server.maxMoney;   
+    if (ns.ls('home', 'Formulas.exe').length > 0)
+        hf = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    return hf * server.targetedBy.hack * server.maxMoney;
 }
