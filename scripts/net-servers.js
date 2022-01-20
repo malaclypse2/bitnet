@@ -40,6 +40,7 @@ export async function main(ns) {
         ['buy', 0],
         ['delete', 0],
         ['num', 1],
+        ['name', ''],
     ]);
     if (args.delete != 0) {
         servers = deleteServers(args, servers, ns);
@@ -47,6 +48,7 @@ export async function main(ns) {
     if (args.buy != 0) {
         for (let i = 0; i < args.num; i++) {
             let name = names[servers.length % names.length];
+            if (args.name !== '') name = args.name;
             ns.purchaseServer(name, Math.pow(2, args.buy));
         }
         servers = ns.getPurchasedServers();

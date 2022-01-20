@@ -50,12 +50,12 @@ export const subsystems = [
     new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s'], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], true),
 //    new SubSystem('stats', 'stats.js', 'home'),
-    new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], true),
-    new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
-    new SubSystem('gangs', 'gangs.js', 'home'),
-    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home'),
-    new SubSystem('work', 'work-for-factions.js', 'home'),
+    new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], false),
+    new SubSystem('stockmaster', 'stockmaster.js', 'home', [], false),
+    new SubSystem('gangs', 'gangs.js', 'home', [], true),
+    new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home', [], true),
+    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home', [], true),
+    new SubSystem('work', 'work-for-factions.js', 'home', [], true),
     new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'], true),
 ];
 
@@ -509,7 +509,7 @@ export class C2Response extends C2Message {
  * @export
  * @class Server
  */
-const PurchasedServerNames = [
+export const PurchasedServerNames = [
     'Alpha(α)',
     'Beta(β)',
     'Gamma(γ)',
@@ -536,6 +536,7 @@ const PurchasedServerNames = [
     'Omega(Ω)',
     'Infinity(∞)',
     'daemon',
+    'Corp(©)',
 ];
 
 class Threadcount {

@@ -95,27 +95,44 @@ export async function main(ns) {
  * @param {NS} ns
  */
 async function runStartCommand(host, args, ns) {
+    // Let's see if we're just restarting one thing
+    let sys = '';
+    let subsystem;
+
+    if (args._.length > 0) {
+        sys = args._.shift();
+    }
+
     // This will bring a running monitor mindow to life, or start one if there isn't one.
-    await runMonitorCommand(host, args, ns);
+    if (['', 'mon'].includes(sys)) {
+        await runMonitorCommand(host, args, ns);
+    }
 
     // Start the host manager
-    let subsystem = subsystems.find((s) => s.name === 'host-manager');
-    if (subsystem.status === 'STOPPED') {
-        ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
-    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
-
+    if (['', 'host-manager', 'host'].includes(sys)) {
+        subsystem = subsystems.find((s) => s.name === 'host-manager');
+        let sysargs = args._.length > 0 ? args._ : subsystem.defaultargs;
+        if (subsystem.status === 'STOPPED') {
+            ns.exec(subsystem.filename, subsystem.host, 1, ...sysargs);
+        } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+    }
     // Start the work manager. TODO: check for source files, free ram, and maybe a better place to run this.
-    subsystem = subsystems.find((s) => s.name === 'work');
-    if (subsystem.status === 'STOPPED') {
-        ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
-    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
-
+    if (['', 'work', 'work-for-faction'].includes(sys)) {
+        subsystem = subsystems.find((s) => s.name === 'work');
+        let sysargs = args._.length > 0 ? args._ : subsystem.defaultargs;
+        if (subsystem.status === 'STOPPED') {
+            ns.exec(subsystem.filename, subsystem.host, 1, ...sysargs);
+        } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+    }
     // Start the daemon in if it's not running. Must do this last, if we're use spawn instead of exec.
-    subsystem = subsystems.find((s) => s.name === 'daemon');
-    if (subsystem.status === 'STOPPED') {
-        //ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
-        ns.spawn(subsystem.filename, 1, ...subsystem.defaultargs);
-    } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+    if (['', 'daemon'].includes(sys)) {
+        subsystem = subsystems.find((s) => s.name === 'daemon');
+        let sysargs = args._.length > 0 ? args._ : subsystem.defaultargs;
+        if (subsystem.status === 'STOPPED') {
+            //ns.exec(subsystem.filename, subsystem.host, 1, ...subsystem.defaultargs);
+            ns.spawn(subsystem.filename, 1, ...sysargs);
+        } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+    }
 }
 
 /**
@@ -144,8 +161,12 @@ async function runTailCommand(_host, args, ns) {
  * @param {import('/scripts/index.js').NS} ns
  */
 async function runStopCommand(host, args, ns) {
-    ns.tprint(`Killing running subsystems`);
-    for (const sys of subsystems) {
+    let subsystem = '';
+    // If we were passed an argument, just shut down the one subsystem.
+    if (args._.length > 0) {
+        subsystem = args._.shift();
+        ns.tprint(`Killing ${subsystem} subsystem`);
+        let sys = subsystems.find((s) => s.name === subsystem);
         if (sys.status === 'RUNNING') {
             let process = sys.process;
             let isThisScript =
@@ -159,6 +180,25 @@ async function runStopCommand(host, args, ns) {
                 ns.kill(process.filename, host, ...process.args);
             }
             sys.refreshStatus(ns);
+        }
+    } else {
+        // Otherwise, shut everything  down
+        ns.tprint(`Killing all running subsystems`);
+        for (const sys of subsystems) {
+            if (sys.status === 'RUNNING') {
+                let process = sys.process;
+                let isThisScript =
+                    process.filename === ns.getScriptName() && process.args === ns.args && host === ns.getHostname();
+                if (sys.name === 'stockmaster') {
+                    // Quit stockmaster gracefully.
+                    ns.exec('/stockmaster.js', sys.host, 1, '--liquidate');
+                } else if (!isThisScript) {
+                    // Otherwise, kill everything important other than ourselves.
+                    ns.tprint(`... Killing ${process.filename} ${process.args.join(' ')}`);
+                    ns.kill(process.filename, host, ...process.args);
+                }
+                sys.refreshStatus(ns);
+            }
         }
     }
 }
