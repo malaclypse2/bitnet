@@ -30,6 +30,8 @@
 /** @typedef{import('/scripts/index.js').NS} NS*/
 import { subsystems, C2Command, C2Message, sendC2message } from '/scripts/bit-lib.js';
 
+const corpServerName = 'Corp(©)';
+
 /**
  * @param {NS} ns
  */
@@ -307,6 +309,7 @@ async function runServersCommand(host, args, ns) {
         net server list -  list current purchased servers
         net server prices - show price list
         net server buy [num] size - Buy num servers at a particular size. Default 1
+        net server buy corp - Buy a 2 TB server, reserved for corporate scripts
         net server delete server# - delete a server
         net server upgrade [server#] size - upgrade existing purchased server to size`;
         ns.tprint(msg);
@@ -328,8 +331,13 @@ async function runServersCommand(host, args, ns) {
                 let siz = args._.pop();
                 let num = args._.pop();
                 num = num ?? 1;
-                for (let i = 0; i < num; i++) {
-                    ns.exec(script_server, host, 1, '--buy', siz);
+                if (siz === 'corp') {
+                    // Size 11 is 2TB. Use the corp server name from the top of this file.
+                    ns.exec(script_server, host, 1, '--buy', 11, '--name', corpServerName);
+                } else {
+                    for (let i = 0; i < num; i++) {
+                        ns.exec(script_server, host, 1, '--buy', siz);
+                    }
                 }
             } else {
                 let msg = `Unknown arguments to net server buy: '${args._.join(
