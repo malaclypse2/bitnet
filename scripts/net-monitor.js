@@ -3,11 +3,13 @@ import {
     getPoolFromServers,
     getAllServerObjects,
     printfSeverAsTarget,
-    C2Command,
+    C2Command, C2Message,
     sendC2message,
 } from '/scripts/bit-lib.js';
 import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
 import { Server, pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
+
+import { createBox } from '/box/box.js';
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 
@@ -36,7 +38,7 @@ export async function main(ns) {
         ns.tprint('Stopping any running monitors.');
         runStop(ns);
     } else if (args.start) {
-        await runDisplayLoop(args.target, args.display, ns);
+        await runDisplayLoop(args.display, ns);
     } else {
         let msg = `
 			Invalid flags.  Command line should include either:
@@ -51,7 +53,7 @@ export async function main(ns) {
 }
 
 /** @param {NS} ns */
-async function runDisplayLoop(displayTarget, _displayType, ns) {
+async function runDisplayLoop(_displayType, ns) {
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
     ns.disableLog('getServerUsedRam');
@@ -62,18 +64,25 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
     ns.disableLog('getHackingLevel');
     ns.disableLog('sleep');
     ns.disableLog('asleep');
+    ns.disableLog('scan');
 
-    let displayType = _displayType;
-    if (displayType === 'default') displayType = 'Short';
+    // Create the (first) display box.
+    /** @type {Element} */
+    let box = createBox('Panopticon', '<div class="panopticon-monitor"></div>');
+
+    let displays = {};
+    if (_displayType === 'default') displays['Short'] = box;
+    else displays[_displayType] = box;
+    ns.atExit(() => {
+        for (const displayType in displays) {
+            displays[displayType].remove();
+        }
+    });
 
     /** @type {Object.<string,Server} */
     let servers = {};
     /** @type {import('./bit-lib.js').Player} */
     let playerInfo = {};
-
-    ns.tail();
-    let lastlog = ``;
-    let factionData;
 
     let on10 = 0,
         on50 = 0,
@@ -86,18 +95,22 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
 
         if (on10 == 1) {
             // Read our C2 messages. We're doing it inline so that we can update locals more easily.
+            ns.print(`Reading C2 messages:`)
             let inbox = await readC2messages('net-monitor', ns);
             for (const msg of inbox) {
+                ns.print(msg);
                 let requeue = true;
-                if (msg instanceof C2Command && msg.action === 'set') {
-                    if (msg.key === 'display' && _displayType === 'default') {
-                        if (msg.value === 'next') {
-                            let i = displayTypes.findIndex((t) => t === displayType);
-                            i = ++i % displayTypes.length;
-                            displayType = displayTypes[i];
-                        } else {
-                            let newDisplayType = displayTypes.find((t) => t.toLowerCase() === msg.value.toLowerCase());
-                            if (newDisplayType) displayType = newDisplayType;
+                if (msg.subtype === 'C2Command' && msg.action === 'set') {
+                    if (msg.key === 'display') {
+                        let newDisplayType = displayTypes.find((t) => t.toLowerCase() === msg.value.toLowerCase());
+                        if (newDisplayType) {
+                            /** @type {Element} */
+                            let oldBox = displays[newDisplayType];
+                            if (oldBox !== undefined) oldBox.remove();
+                            displays[newDisplayType] = createBox(
+                                'Panopticon',
+                                '<div class="panopticon-monitor"></div>'
+                            );
                         }
                         requeue = false;
                     }
@@ -122,9 +135,17 @@ async function runDisplayLoop(displayTarget, _displayType, ns) {
         updateSubsystemInfo(ns);
 
         // Finally, print a fancy log of the current state of play
-        printFancyLog(servers, displayType, playerInfo, ns);
-        if (lastlog) ns.print(lastlog);
-        await ns.asleep(100);
+        for (const displayType in displays) {
+            /** @type {Element} */
+            let allGone = true;
+            const box = displays[displayType];
+            if (box.parentElement !== null && box.parentElement !== undefined) {
+                printFancyLog(servers, displayType, playerInfo, box, ns);
+                allGone = false;
+            }
+            if (allGone) ns.exit();
+        }
+        await ns.asleep(500);
     }
 }
 
@@ -148,22 +169,25 @@ function runStop(ns) {
  * @param {Server[]} targets
  * @param {*} logType
  * @param {*} playerInfo
+ * @param {Element} box
  * @param {NS} ns
  */
-export function printFancyLog(servers, logType, playerInfo, ns) {
-    ns.clearLog(...ns.args);
+export function printFancyLog(servers, logType, playerInfo, box, ns) {
     const insideWidth = 48;
 
     let lines = [];
 
+    let printfn = ns.print;
+    let output = [];
+    printfn = (obj) => output.push(obj);
     // Printing.  Kind of hacky use of the logtype. Should probably fix it.
-    let printColumns = (data) => printItemsNColumns(data, 1, ns.print);
+    let printColumns = (data) => printItemsNColumns(data, 1, printfn);
     if (logType.endsWith('2Up')) {
-        printColumns = (data) => printItemsNColumns(data, 2, ns.print);
+        printColumns = (data) => printItemsNColumns(data, 2, printfn);
     } else if (logType.endsWith('3Up')) {
-        printColumns = (data) => printItemsNColumns(data, 3, ns.print);
+        printColumns = (data) => printItemsNColumns(data, 3, printfn);
     }
-    let print1Column = (data) => printItemsNColumns(data, 1, ns.print);
+    let print1Column = (data) => printItemsNColumns(data, 1, printfn);
 
     let thirtySecondsAgo = Date.now() - 30000;
     let targets = Object.values(servers);
@@ -297,7 +321,7 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
         let prepThreadCount = ns.nFormat(prepTargetsThreadCount, '0.0a');
 
         // Print the top N targets
-        ns.print(`Hacking top ${topHackTargets.length} targets, using ${topHackThreadCount} threads: `);
+        printfn(`Hacking top ${topHackTargets.length} targets, using ${topHackThreadCount} threads: `);
         printColumns(sections.hackTargets.slice(0, topN));
 
         let overflowsection = [];
@@ -328,9 +352,8 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
             let boxedstr = boxdraw([targetstr], targetTitle, insideWidth, true);
             overflowsection.push(boxedstr);
         }
-
         if (hackTargets.length + prepTargets.length <= 6) {
-            ns.print(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
+            printfn(`Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads:`);
             printColumns(sections.prepTargets);
         } else {
             let title = `Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads`;
@@ -370,6 +393,12 @@ export function printFancyLog(servers, logType, playerInfo, ns) {
     }
 
     // Print any common trailer stuff here.
+    let htmlFormat = (s) => {
+        if (s === '') s = '</br>';
+        return `<p>${s}</p>`;
+    };
+    let monitorElem = box.querySelector('.panopticon-monitor');
+    monitorElem.innerHTML = output.map((line) => htmlFormat(line)).join('');
 }
 
 function formatSubsystemSection(ns, insideWidth) {
