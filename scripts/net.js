@@ -55,6 +55,7 @@ export async function main(ns) {
         servers: runServersCommand,
         backdoor: runBackdoorCommand,
         tail: runTailCommand,
+        corp: runCorpCommand,
     };
     // command aliases
     if (args._.length > 0) {
@@ -383,4 +384,14 @@ async function runStatusCommand(host, args, ns) {
 async function runBackdoorCommand(host, args, ns) {
     ns.tprint(`Backdooring all systems. `);
     ns.exec('/scripts/net-backdoor', host, 1);
+}
+/**
+ * Try to backdoor all the things.
+ * @param {string} host - the host to run against
+ * @param {*} args - flags passed in from the command line.
+ * @param {import("/scripts/index.js").NS} ns
+ */
+ async function runCorpCommand(host, args, ns) {
+    ns.tprint(`Running corporate subsystem.`);
+    ns.exec('/scripts/net-corp.js', host, 1, ...args._);
 }
