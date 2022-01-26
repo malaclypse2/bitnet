@@ -1,0 +1,3 @@
+[submodule "snarling-box"]
+	path = snarling-box
+	url = https://github.com/Snarling/bitburner-scripts.git
