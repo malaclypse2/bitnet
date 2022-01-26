@@ -47,14 +47,15 @@ export class SubSystem {
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s'], true),
+    new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s', '--cycle-timing-delay', 1600], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], true),
-//    new SubSystem('stats', 'stats.js', 'home'),
+    new SubSystem('stats', 'stats.js', 'home'),
     new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], false),
-    new SubSystem('stockmaster', 'stockmaster.js', 'home', [], false),
+    new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
+    new SubSystem('stockticker', '/Temp/stockmarket-summary-tail.js', 'home', [], true),
     new SubSystem('gangs', 'gangs.js', 'home', [], true),
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home', [], true),
-    new SubSystem('sleeve', 'spend-hacknet-hashes.js', 'home', [], true),
+    new SubSystem('sleeve', 'sleeve.js', 'home', [], true),
     new SubSystem('work', 'work-for-factions.js', 'home', [], true),
     new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'], true),
 ];

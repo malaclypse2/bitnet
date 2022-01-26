@@ -146,7 +146,19 @@ async function runStartCommand(host, args, ns) {
  * @param {NS} ns
  */
 async function runTailCommand(_host, args, ns) {
-    for (const sys of subsystems) {
+    // Default to tailing everything we know about.
+    let systemsToTail = subsystems;
+
+    // Unless we were passed arguments.
+    if (args._.length > 0) {
+        systemsToTail = [];
+        while (args._.length > 0) {
+            let sysname = args._.shift();
+            systemsToTail.push(subsystems.find((s) => s.name.toLowerCase() === sysname.toLowerCase()));
+        }
+    }
+
+    for (const sys of systemsToTail) {
         if (sys.status === 'RUNNING' && sys.shouldTail) {
             // check to see if there's another instance running to also pull up (mostly for net-monitor)
             for (const ps of ns.ps(sys.host)) {
@@ -391,7 +403,7 @@ async function runBackdoorCommand(host, args, ns) {
  * @param {*} args - flags passed in from the command line.
  * @param {import("/scripts/index.js").NS} ns
  */
- async function runCorpCommand(host, args, ns) {
+async function runCorpCommand(host, args, ns) {
     ns.tprint(`Running corporate subsystem.`);
     ns.exec('/scripts/net-corp.js', host, 1, ...args._);
 }
