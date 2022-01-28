@@ -54,6 +54,8 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function runDisplayLoop(_displayType, ns) {
+    const refreshRate = 5 // Refreshes per second.
+
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
     ns.disableLog('getServerUsedRam');
@@ -92,6 +94,7 @@ async function runDisplayLoop(_displayType, ns) {
         on10 = ++on10 % 10;
         on50 = ++on50 % 50;
         on100 = ++on100 % 100;
+        let startTime = Date.now();
 
         if (on10 == 1) {
             // Read our C2 messages. We're doing it inline so that we can update locals more easily.
@@ -134,18 +137,21 @@ async function runDisplayLoop(_displayType, ns) {
         // Get the status of any running subsystems
         updateSubsystemInfo(ns);
 
+        let allGone = true;
         // Finally, print a fancy log of the current state of play
         for (const displayType in displays) {
             /** @type {Element} */
-            let allGone = true;
             const box = displays[displayType];
             if (box.parentElement !== null && box.parentElement !== undefined) {
                 printFancyLog(servers, displayType, playerInfo, box, ns);
                 allGone = false;
             }
-            if (allGone) ns.exit();
         }
-        await ns.asleep(500);
+        if (allGone) ns.exit();
+        let endTime = Date.now();
+        let sleepTime = 1000 / refreshRate;
+        sleepTime = Math.round(sleepTime + startTime - endTime);
+        await ns.asleep(sleepTime);
     }
 }
 
@@ -281,7 +287,7 @@ export function printFancyLog(servers, logType, playerInfo, box, ns) {
     // --- Swarm status ---
     lines = [
         `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`,
-        `  Hack: ${pool.hack}, Grow: ${pool.grow}, Weaken: ${pool.weaken}`,
+        `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`,
     ];
     let data = boxdraw(lines, 'Swarm Status', insideWidth);
     sections.swarmStatus.push(data);
@@ -406,7 +412,7 @@ function formatSubsystemSection(ns, insideWidth) {
     runningSubsystems.sort((a, b) => a.scriptInfo.onlineMoneyMade - b.scriptInfo.onlineMoneyMade).reverse();
 
     // Pad out the subsystem name display to fit in a neat column.
-    let namePadLen = 21;
+    let namePadLen = 20;
     let namePad = Array(namePadLen + 1).join(' ');
     let lines = [];
 
@@ -422,7 +428,7 @@ function formatSubsystemSection(ns, insideWidth) {
         }
         let name = pad(namePad, system.name);
         let size = ns.nFormat(script.ramUsage * Math.pow(10, 9), '0.00 b');
-        size = pad('       ', size, true);
+        size = pad('        ', size, true);
         let line = `${name} ${size}  ${income} ${cps}`;
         lines.push(line);
     }

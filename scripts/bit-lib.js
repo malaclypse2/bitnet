@@ -48,7 +48,7 @@ export class SubSystem {
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
     new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s', '--cycle-timing-delay', 1600], true),
-    new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], true),
+    new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], false),
     new SubSystem('stats', 'stats.js', 'home'),
     new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], false),
     new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
@@ -57,7 +57,13 @@ export const subsystems = [
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home', [], true),
     new SubSystem('sleeve', 'sleeve.js', 'home', [], true),
     new SubSystem('work', 'work-for-factions.js', 'home', [], true),
-    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'], true),
+    new SubSystem(
+        'host-manager',
+        'host-manager.js',
+        'home',
+        ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'],
+        true
+    ),
 ];
 
 /** @param {NS} ns */
@@ -143,10 +149,9 @@ export function printfSeverAsTarget(server, ns) {
     const growsRunning = ns.nFormat(server.targetedBy.grow, '0a');
     const weakensRunning = ns.nFormat(server.targetedBy.weaken, '0a');
     let hackFactor = server.hackFactor;
-    if(ns.ls('home', 'Formulas.exe').length >0 )
+    if (ns.ls('home', 'Formulas.exe').length > 0)
         hackFactor = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
-    //let hackFactor = server.hackFactor;
-    const amountToBeStolen = hackFactor * server.targetedBy.hack * server.currentMoney;
+    const amountToBeStolen = hackFactor * server.targetedBy.hack * server.maxMoney;
     let stealing = '';
     if (amountToBeStolen > 0) {
         stealing = ns.nFormat(amountToBeStolen, '$0.0a');
@@ -312,19 +317,29 @@ export function updateAttackStatus(_servers, ns) {
         proc.filename.includes('weak') && proc.args.length > 0 && servers.some((s) => s.name === proc.args[0]);
     let isGrowProcess = (proc) =>
         proc.filename.includes('grow') && proc.args.length > 0 && servers.some((s) => s.name === proc.args[0]);
+    let isShareProcess = (proc) => proc.filename.includes('share');
     for (const server of servers) {
+        try {
+            ns.getServer(server.name);
+        } catch {
+            delete servers[server];
+            continue;
+        }
         let ps = ns.ps(server.name);
         for (const proc of ps) {
             let procType = 'unknown';
             if (isHackProcess(proc)) procType = 'hack';
             if (isWeakenProcess(proc)) procType = 'weaken';
             if (isGrowProcess(proc)) procType = 'grow';
+            if (isShareProcess(proc)) procType = 'share';
             if (procType !== 'unknown') {
                 // Update the source and target of these threads.
                 server.running[procType] += proc.threads;
                 let target = servers.find((s) => s.name === proc.args[0]);
-                target.targetedBy[procType] += proc.threads;
-                target.lastTimeSeenTargetedBy[procType] = Date.now();
+                if (target) {
+                    target.targetedBy[procType] += proc.threads;
+                    target.lastTimeSeenTargetedBy[procType] = Date.now();
+                }
             }
         }
     }
@@ -393,10 +408,9 @@ function splitNWays(items, n) {
  */
 export function printItemsNColumns(items, n, printfn) {
     if (items.length === 0) return;
-    if (items.length === 1 && items[0].length===0) return;
+    if (items.length === 1 && items[0].length === 0) return;
     /** @type{string[][][]} */
     let columns = splitNWays(items, n);
-    
 
     // Now columns[0] is is a list of items to print in column 0, etc.
     // Since we want to print by rows, let's transpose the array
@@ -406,12 +420,13 @@ export function printItemsNColumns(items, n, printfn) {
         let numrows = 0;
         try {
             numrows = Math.max(...row.map((item) => item.length));
+        } catch {
+            /*pass*/
         }
-        catch { /*pass*/ }
         for (let i = 0; i < numrows; i++) {
             let line = row.map((item) => {
                 if (item && item.length > i) return item[i];
-                else return Array(item[0].length+1).join(' ');
+                else return Array(item[0].length + 1).join(' ');
             });
             // line is now an Array of strings, which just need to be joined and printed.
             printfn(line.join('   '));
@@ -442,14 +457,15 @@ export function printLinesNColumns(lines, n, printfn) {
  * @param {NS} ns */
 export function getPoolFromServers(servers, ns) {
     const _DEBUG = false;
-    let pool = { free: 0, grow: 0, hack: 0, weaken: 0, running: 0 };
+    let pool = { free: 0, grow: 0, hack: 0, weaken: 0, share: 0, running: 0 };
     let s = Array.from(Object.values(servers));
 
     pool.free = s.reduce((sum, server) => sum + server.slots, 0);
     pool.hack = s.reduce((sum, server) => sum + server.running.hack, 0);
     pool.grow = s.reduce((sum, server) => sum + server.running.grow, 0);
     pool.weaken = s.reduce((sum, server) => sum + server.running.weaken, 0);
-    pool.running += pool.grow + pool.hack + pool.weaken;
+    pool.share = s.reduce((sum, server) => sum + server.running.share, 0);
+    pool.running += pool.grow + pool.hack + pool.weaken + pool.share;
     if (_DEBUG) {
         ns.tprint(`Calculating pool as: ${JSON.stringify(pool)}.`);
     }
@@ -541,13 +557,14 @@ export const PurchasedServerNames = [
 ];
 
 class Threadcount {
-    constructor(hack = 0, grow = 0, weaken = 0) {
+    constructor(hack = 0, grow = 0, weaken = 0, share = 0) {
         this.hack = hack;
         this.grow = grow;
         this.weaken = weaken;
+        this.share = share;
     }
     get total() {
-        return this.hack + this.grow + this.weaken;
+        return this.hack + this.grow + this.weaken + this.share;
     }
 }
 
@@ -617,8 +634,8 @@ export function wordwrap(long_string, max_char) {
         if (line.length + 1 + word.length > max_char) {
             // See if there's a hyphen in the word, and if we could split it there to fit.
             let splitword = word.split('-');
-            for (let i = splitword.length; i > 0 ; i--) {
-                let partial = splitword.slice(0,i).join('-')+'-';
+            for (let i = splitword.length; i > 0; i--) {
+                let partial = splitword.slice(0, i).join('-') + '-';
                 let remainder = splitword.slice(i).join('-');
                 if (line.length + 1 + partial.length <= max_char) {
                     // This partial word fits!
@@ -629,7 +646,7 @@ export function wordwrap(long_string, max_char) {
             }
             lines.push(line);
             line = '';
-        } 
+        }
         if (line === '') line = word;
         else line += ' ' + word;
     }

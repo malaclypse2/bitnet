@@ -289,19 +289,11 @@ async function runMonitorCommand(host, args, ns) {
             ns.exec('/scripts/net-monitor.js', host, 1, '--start');
         }
         mon.refreshStatus(ns);
-        if (mon.status === 'RUNNING') {
-            ns.tail(mon.filename, mon.host, ...mon.process.args);
-        }
         if (args._.length > 0) {
             // Broadcast to the monitor app.
             let display = args._.shift();
-            // if the next argument is 'lock', 'new', or 'start' then start a new monitor thread instead of switching the main one.
-            if (args._.length > 0 && ['lock', 'start', 'new'].includes(args._[0])) {
-                ns.exec('/scripts/net-monitor.js', host, 1, '--start', '--display', display);
-            } else {
-                let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
-                await sendC2message(cmd, ns);
-            }
+            let cmd = new C2Command('net-monitor', 'net', 'set', 'display', display, ns);
+            await sendC2message(cmd, ns);
         }
     }
 }
