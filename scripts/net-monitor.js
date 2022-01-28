@@ -180,12 +180,14 @@ function runStop(ns) {
  */
 export function printFancyLog(servers, logType, playerInfo, box, ns) {
     const insideWidth = 48;
-
     let lines = [];
-
     let printfn = ns.print;
+
+    // Since we want to stuff all our output into a box, collect it into an array instead of printing it.
     let output = [];
     printfn = (obj) => output.push(obj);
+
+
     // Printing.  Kind of hacky use of the logtype. Should probably fix it.
     let printColumns = (data) => printItemsNColumns(data, 1, printfn);
     if (logType.endsWith('2Up')) {
@@ -195,7 +197,7 @@ export function printFancyLog(servers, logType, playerInfo, box, ns) {
     }
     let print1Column = (data) => printItemsNColumns(data, 1, printfn);
 
-    let thirtySecondsAgo = Date.now() - 30000;
+    let thirtySecondsAgo = Date.now() - 30 * 1000;
     let targets = Object.values(servers);
     // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
     targets = targets.filter(
@@ -307,6 +309,7 @@ export function printFancyLog(servers, logType, playerInfo, box, ns) {
         let topHackTargets = hackTargets.slice(0, topN);
         let otherHackTargets = hackTargets.slice(topN, hackTargets.length);
         // Use a more stable sort for this bit, so they don't go moving around all the time.
+        topHackTargets.sort(cmpByMaxMoney).reverse();
         otherHackTargets.sort(cmpByMaxMoney).reverse();
 
         let hackTargetsThreadCount = hackTargets

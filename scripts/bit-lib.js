@@ -57,13 +57,7 @@ export const subsystems = [
     new SubSystem('spend-hacknet-hashes', 'spend-hacknet-hashes.js', 'home', [], true),
     new SubSystem('sleeve', 'sleeve.js', 'home', [], true),
     new SubSystem('work', 'work-for-factions.js', 'home', [], true),
-    new SubSystem(
-        'host-manager',
-        'host-manager.js',
-        'home',
-        ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'],
-        true
-    ),
+    new SubSystem('host-manager', 'host-manager.js', 'home', ['-c', '--utilization-trigger', 0.7, '--reserve-by-time'], true),
 ];
 
 /** @param {NS} ns */
@@ -318,11 +312,13 @@ export function updateAttackStatus(_servers, ns) {
     let isGrowProcess = (proc) =>
         proc.filename.includes('grow') && proc.args.length > 0 && servers.some((s) => s.name === proc.args[0]);
     let isShareProcess = (proc) => proc.filename.includes('share');
+    let serversToRemove = [];
     for (const server of servers) {
         try {
             ns.getServer(server.name);
         } catch {
-            delete servers[server];
+            // Can we remove keys while iterating over the object safely? Better just collect the servers to remove and do it at the end.
+            serversToRemove.push(server)
             continue;
         }
         let ps = ns.ps(server.name);
@@ -342,6 +338,9 @@ export function updateAttackStatus(_servers, ns) {
                 }
             }
         }
+    }
+    for (const server of serversToRemove) {
+        delete servers[server];
     }
     // Do we care about the server.desired stats anymore? SKip for now.
 }
