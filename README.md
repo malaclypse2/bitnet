@@ -21,12 +21,20 @@ alias net="run /scripts/net.js"
 then play around with:
 
 net monitor
+
 net mon targets1up
+
 net monitor targets2up
+
 net start
+
 net stop
+
 net restart
+
 net tail
+
 net tail <subsystem>
+  
 
   etc.
