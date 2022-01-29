@@ -1,4 +1,4 @@
-# bitburner-scripts
+# bitnet
 
 My collection of bitburner scripts. 
 
@@ -15,3 +15,18 @@ net-monitor.js runs some semi-fancy monitors of what the system is doing.
 bitlib.js tries to consolidate non-application specific code
 
 ![image](https://user-images.githubusercontent.com/9218823/148892837-e9ce5d75-83dc-4628-8cec-bbf8b14aa002.png)
+
+alias net="run /scripts/net.js"
+
+then play around with:
+
+net monitor
+net mon targets1up
+net monitor targets2up
+net start
+net stop
+net restart
+net tail
+net tail <subsystem>
+
+  etc.
