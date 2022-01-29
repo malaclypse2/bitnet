@@ -3,7 +3,8 @@ import {
     getPoolFromServers,
     getAllServerObjects,
     printfSeverAsTarget,
-    C2Command, C2Message,
+    C2Command,
+    C2Message,
     sendC2message,
 } from '/scripts/bit-lib.js';
 import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
@@ -54,7 +55,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function runDisplayLoop(_displayType, ns) {
-    const refreshRate = 5 // Refreshes per second.
+    const refreshRate = 5; // Refreshes per second.
 
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
@@ -72,12 +73,21 @@ async function runDisplayLoop(_displayType, ns) {
     /** @type {Element} */
     let box = createBox('Panopticon', '<div class="panopticon-monitor"></div>');
 
+    // Default to a short display
     let displays = {};
     if (_displayType === 'default') displays['Short'] = box;
     else displays[_displayType] = box;
+
+    // Default to not tailing any logs.
+    let logWindows = {};
+
+    // Clean up any open windows when we shut down.
     ns.atExit(() => {
         for (const displayType in displays) {
             displays[displayType].remove();
+        }
+        for (const logWindow in logWindows) {
+            logWindows[logWindow].remove();
         }
     });
 
@@ -98,7 +108,7 @@ async function runDisplayLoop(_displayType, ns) {
 
         if (on10 == 1) {
             // Read our C2 messages. We're doing it inline so that we can update locals more easily.
-            ns.print(`Reading C2 messages:`)
+            ns.print(`Reading C2 messages:`);
             let inbox = await readC2messages('net-monitor', ns);
             for (const msg of inbox) {
                 ns.print(msg);
@@ -111,8 +121,20 @@ async function runDisplayLoop(_displayType, ns) {
                             let oldBox = displays[newDisplayType];
                             if (oldBox !== undefined) oldBox.remove();
                             displays[newDisplayType] = createBox(
-                                'Panopticon',
+                                'Panopticon Monitor',
                                 '<div class="panopticon-monitor"></div>'
+                            );
+                        }
+                        requeue = false;
+                    } else if (msg.key === 'log') {
+                        let newSubsystem = subsystems.find((s) => s.name.toLowerCase() === msg.value.toLowerCase());
+                        if (newSubsystem) {
+                            /** @type {Element} */
+                            let oldBox = logWindows[newSubsystem.name];
+                            if (oldBox !== undefined) oldBox.remove();
+                            logWindows[newSubsystem.name] = createBox(
+                                'Panopticon Log',
+                                '<div class="panopticon-log"></div>'
                             );
                         }
                         requeue = false;
@@ -143,7 +165,15 @@ async function runDisplayLoop(_displayType, ns) {
             /** @type {Element} */
             const box = displays[displayType];
             if (box.parentElement !== null && box.parentElement !== undefined) {
-                printFancyLog(servers, displayType, playerInfo, box, ns);
+                printFancyStatus(servers, displayType, playerInfo, box, ns);
+                allGone = false;
+            }
+        }
+        for (const subsystem in logWindows) {
+            /** @type {Element} */
+            const box = logWindows[subsystem];
+            if (box.parentElement !== null && box.parentElement !== undefined) {
+                printLogMessages(subsystem, box, ns);
                 allGone = false;
             }
         }
@@ -170,15 +200,37 @@ function runStop(ns) {
 }
 
 /**
- *
+ * Duplicate a log of a running script into the box.
+ * @param {string} subsystem
+ * @param {Element} box
+ * @param {NS} ns
+ */
+export function printLogMessages(subsystem, box, ns) {
+    ns.print('Finding log messages for subsystem: ' + subsystem);
+    let sys = subsystems.find((s) => s.name === subsystem);
+    if (!sys) return;
+    sys.refreshStatus(ns);
+
+    let output = ns.getScriptLogs(sys.filename, sys.host, ...sys.process.args);
+
+    let htmlFormat = (s) => {
+        if (s === '') s = '</br>';
+        return `<p>${s}</p>`;
+    };
+    let monitorElem = box.querySelector('.panopticon-log');
+    monitorElem.innerHTML = output.slice(-10).map((line) => htmlFormat(line)).join('');
+}
+
+/**
+ * Print our fancy status display into the box.
  * @param {Object.<string,Server>} servers
  * @param {Server[]} targets
- * @param {*} logType
+ * @param {string} logType
  * @param {*} playerInfo
  * @param {Element} box
  * @param {NS} ns
  */
-export function printFancyLog(servers, logType, playerInfo, box, ns) {
+export function printFancyStatus(servers, logType, playerInfo, box, ns) {
     const insideWidth = 48;
     let lines = [];
     let printfn = ns.print;
@@ -186,7 +238,6 @@ export function printFancyLog(servers, logType, playerInfo, box, ns) {
     // Since we want to stuff all our output into a box, collect it into an array instead of printing it.
     let output = [];
     printfn = (obj) => output.push(obj);
-
 
     // Printing.  Kind of hacky use of the logtype. Should probably fix it.
     let printColumns = (data) => printItemsNColumns(data, 1, printfn);
@@ -197,17 +248,17 @@ export function printFancyLog(servers, logType, playerInfo, box, ns) {
     }
     let print1Column = (data) => printItemsNColumns(data, 1, printfn);
 
-    let thirtySecondsAgo = Date.now() - 30 * 1000;
+    let aFewSecondsAgo = Date.now() - 45 * 1000;
     let targets = Object.values(servers);
     // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
     targets = targets.filter(
         (s) =>
-            s.lastTimeSeenTargetedBy.hack > thirtySecondsAgo ||
-            s.lastTimeSeenTargetedBy.grow > thirtySecondsAgo ||
-            s.lastTimeSeenTargetedBy.weaken > thirtySecondsAgo
+            s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo ||
+            s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo ||
+            s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo
     );
-    let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > thirtySecondsAgo);
-    let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= thirtySecondsAgo);
+    let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > aFewSecondsAgo);
+    let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= aFewSecondsAgo);
 
     let cmpByTotalAttackThreads = function (a, b) {
         let at = a.targetedBy.hack + a.targetedBy.weaken + a.targetedBy.grow;

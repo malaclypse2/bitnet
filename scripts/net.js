@@ -37,7 +37,10 @@ const corpServerName = 'Corp(©)';
  */
 export async function main(ns) {
     // arg parsing
-    let args = ns.flags([['help', false]]);
+    //let args = ns.flags([['help', false]]);
+    let args = { _: [] };
+    args._ = ns.args;
+
     let host = ns.getHostname();
 
     // Make sure our subsystem status is set up.
@@ -160,7 +163,10 @@ async function runTailCommand(_host, args, ns) {
 
     for (const sys of systemsToTail) {
         if (sys.status === 'RUNNING' && sys.shouldTail) {
-            // check to see if there's another instance running to also pull up (mostly for net-monitor)
+            // Use our network monito to tail the windows, so we can do re-coloring and stuff?
+            // await sendC2message(new C2Command('net-monitor', 'net', 'set', 'log', sys.name, ns), ns);
+
+            //check to see if there's another instance running to also pull up (mostly for net-monitor)
             for (const ps of ns.ps(sys.host)) {
                 if (ps.filename == sys.filename) ns.tail(sys.filename, sys.host, ...ps.args);
             }
