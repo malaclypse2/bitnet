@@ -47,7 +47,7 @@ export class SubSystem {
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', 'daemon.js', 'home', ['-v', '-s', '--cycle-timing-delay', 1600], true),
+    new SubSystem('daemon', 'daemon.js', 'home', ['-s', '--cycle-timing-delay', 400, '--share-max-utilization', 0.8], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], false),
     new SubSystem('stats', 'stats.js', 'home'),
     new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], false),
@@ -63,7 +63,7 @@ export const subsystems = [
 /** @param {NS} ns */
 export async function main(ns) {
     ns.tprint('No user servicable parts inside.');
-
+    
     ns.tprint('getPlayerInfo:');
     let playerInfo = getPlayerInfo(ns);
     ns.tprint(JSON.stringify(playerInfo));
