@@ -1,12 +1,4 @@
-import {
-    getPlayerInfo,
-    getPoolFromServers,
-    getAllServerObjects,
-    printfSeverAsTarget,
-    C2Command,
-    C2Message,
-    sendC2message,
-} from '/scripts/bit-lib.js';
+import { getPoolFromServers, getAllServerObjects, printfSeverAsTarget, sendC2message } from '/scripts/bit-lib.js';
 import { printfServer, printItemsNColumns, updateAttackStatus, boxdraw, percentToGraph } from '/scripts/bit-lib.js';
 import { Server, pad, readC2messages, subsystems } from '/scripts/bit-lib.js';
 
@@ -15,6 +7,10 @@ import { createBox } from '/box/box.js';
 /**@typedef{import('/scripts/index.js').NS} NS */
 
 const displayTypes = ['Short', 'Targets1Up', 'Targets2Up'];
+
+// Globals so we can manipulate the displays via callbacks.
+let displays = {};
+let logWindows = {};
 
 // Let's try to replicate all of the fancy monitoring and logging from net-hack.js here.
 // That way we can move it out of net-hack.js and use that log for actual debugging.
@@ -55,7 +51,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function runDisplayLoop(_displayType, ns) {
-    const refreshRate = 5; // Refreshes per second.
+    const refreshRate = 2; // Refreshes per second.
 
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('getServerMaxRam');
@@ -71,15 +67,14 @@ async function runDisplayLoop(_displayType, ns) {
 
     // Create the (first) display box.
     /** @type {Element} */
-    let box = createBox('Panopticon', '<div class="panopticon-monitor"></div>');
+    let box = createBox('Panopticon Monitor', '<div class="panopticon-monitor"></div>');
 
     // Default to a short display
-    let displays = {};
     if (_displayType === 'default') displays['Short'] = box;
     else displays[_displayType] = box;
 
     // Default to not tailing any logs.
-    let logWindows = {};
+    logWindows = {};
 
     // Clean up any open windows when we shut down.
     ns.atExit(() => {
@@ -93,8 +88,6 @@ async function runDisplayLoop(_displayType, ns) {
 
     /** @type {Object.<string,Server} */
     let servers = {};
-    /** @type {import('./bit-lib.js').Player} */
-    let playerInfo = {};
 
     let on10 = 0,
         on50 = 0,
@@ -106,51 +99,8 @@ async function runDisplayLoop(_displayType, ns) {
         on100 = ++on100 % 100;
         let startTime = Date.now();
 
-        if (on10 == 1) {
-            // Read our C2 messages. We're doing it inline so that we can update locals more easily.
-            ns.print(`Reading C2 messages:`);
-            let inbox = await readC2messages('net-monitor', ns);
-            for (const msg of inbox) {
-                ns.print(msg);
-                let requeue = true;
-                if (msg.subtype === 'C2Command' && msg.action === 'set') {
-                    if (msg.key === 'display') {
-                        let newDisplayType = displayTypes.find((t) => t.toLowerCase() === msg.value.toLowerCase());
-                        if (newDisplayType) {
-                            /** @type {Element} */
-                            let oldBox = displays[newDisplayType];
-                            if (oldBox !== undefined) oldBox.remove();
-                            displays[newDisplayType] = createBox(
-                                'Panopticon Monitor',
-                                '<div class="panopticon-monitor"></div>'
-                            );
-                        }
-                        requeue = false;
-                    } else if (msg.key === 'log') {
-                        let newSubsystem = subsystems.find((s) => s.name.toLowerCase() === msg.value.toLowerCase());
-                        if (newSubsystem) {
-                            /** @type {Element} */
-                            let oldBox = logWindows[newSubsystem.name];
-                            if (oldBox !== undefined) oldBox.remove();
-                            logWindows[newSubsystem.name] = createBox(
-                                'Panopticon Log',
-                                '<div class="panopticon-log"></div>'
-                            );
-                        }
-                        requeue = false;
-                    }
-                }
-                // If we didn't handle the message, put it back on the c2 queue.
-                if (requeue) await sendC2message(msg, ns);
-            }
-        }
-
-        if (on100 == 1) {
-            // Update our player info.
-            playerInfo = getPlayerInfo(ns);
-
-            //factionData = ns.getFactionFavor('${factionName}');
-        }
+        // Read any command and control messages from ports.
+        await readC2Messages(ns);
 
         // Get all the servers, including any newly purchased ones, and refresh the data on them.
         servers = getAllServerObjects(servers, ns);
@@ -164,15 +114,15 @@ async function runDisplayLoop(_displayType, ns) {
         for (const displayType in displays) {
             /** @type {Element} */
             const box = displays[displayType];
-            if (box.parentElement !== null && box.parentElement !== undefined) {
-                printFancyStatus(servers, displayType, playerInfo, box, ns);
+            if (box.parentElement != undefined) {
+                dispatchMonitorUpdate(displayType, servers, box, ns);
                 allGone = false;
             }
         }
         for (const subsystem in logWindows) {
             /** @type {Element} */
             const box = logWindows[subsystem];
-            if (box.parentElement !== null && box.parentElement !== undefined) {
+            if (box.parentElement != undefined) {
                 printLogMessages(subsystem, box, ns);
                 allGone = false;
             }
@@ -182,6 +132,46 @@ async function runDisplayLoop(_displayType, ns) {
         let sleepTime = 1000 / refreshRate;
         sleepTime = Math.round(sleepTime + startTime - endTime);
         await ns.asleep(sleepTime);
+    }
+}
+
+async function readC2Messages(ns) {
+    ns.print(`Reading C2 messages:`);
+    let inbox = await readC2messages('net-monitor', ns);
+    for (const msg of inbox) {
+        ns.print(msg);
+        let requeue = true;
+        if (msg.subtype === 'C2Command' && msg.action === 'set') {
+            if (msg.key === 'display') {
+                addDisplayType(msg.value);
+                requeue = false;
+            } else if (msg.key === 'log') {
+                addLogWindow(msg.value);
+                requeue = false;
+            }
+        }
+        // If we didn't handle the message, put it back on the c2 queue.
+        if (requeue) await sendC2message(msg, ns);
+    }
+}
+
+function addLogWindow(systemName) {
+    let newSubsystem = subsystems.find((s) => s.name.toLowerCase() === systemName.toLowerCase());
+    if (newSubsystem) {
+        /** @type {Element} */
+        let oldBox = logWindows[newSubsystem.name];
+        if (oldBox !== undefined) oldBox.remove();
+        logWindows[newSubsystem.name] = createBox('Panopticon Log', '<div class="panopticon-log"></div>');
+    }
+}
+
+function addDisplayType(displayType) {
+    let newDisplayType = displayTypes.find((t) => t.toLowerCase() === displayType.toLowerCase());
+    if (newDisplayType) {
+        /** @type {Element} */
+        let oldBox = displays[newDisplayType];
+        if (oldBox !== undefined) oldBox.remove();
+        displays[newDisplayType] = createBox('Panopticon Monitor', '<div class="panopticon-monitor"></div>');
     }
 }
 
@@ -214,23 +204,174 @@ export function printLogMessages(subsystem, box, ns) {
     let output = ns.getScriptLogs(sys.filename, sys.host, ...sys.process.args);
 
     let htmlFormat = (s) => {
-        if (s === '') s = '</br>';
+        if (s === '') return '</br>';
         return `<p>${s}</p>`;
     };
     let monitorElem = box.querySelector('.panopticon-log');
-    monitorElem.innerHTML = output.slice(-10).map((line) => htmlFormat(line)).join('');
+    monitorElem.innerHTML = output
+        .slice(-4)
+        .map((line) => htmlFormat(line))
+        .join('');
 }
 
 /**
- * Print our fancy status display into the box.
- * @param {Object.<string,Server>} servers
- * @param {Server[]} targets
+ * Given a logType and a box element, update the box with appropriate data.
  * @param {string} logType
- * @param {*} playerInfo
+ * @param {any} logTarget
  * @param {Element} box
  * @param {NS} ns
  */
-export function printFancyStatus(servers, logType, playerInfo, box, ns) {
+function dispatchMonitorUpdate(logType, logTarget, box, ns) {
+    const dispatch = {
+        Targets1Up: printTargetStatus,
+        Targets2Up: printTargetStatus,
+        Short: printOverviewStatus,
+        Log: printLogMessages,
+    };
+    if (dispatch[logType] != undefined) {
+        dispatch[logType](logType, logTarget, box, ns);
+    } else {
+        ns.tprint(`Trying to update a window with logType '${logType}', but I don't know how to handle that log type.`);
+    }
+}
+
+/**
+ * Print our fancy overview display into the box.
+ * @param {string} logType
+ * @param {Object.<string,Server>} servers
+ * @param {Element} box
+ * @param {NS} ns
+ */
+function printOverviewStatus(logType, servers, box, ns) {
+    const insideWidth = 48;
+    let lines = [];
+    let printfn = ns.print;
+    /* Let's try to get organized. Each section is an array of already-formatted lines. 
+       Generate all of them first, then print them at the end based on what's populated 
+       and what our logType calls for. */
+    /**@type{Object.<string, string[][]>} */
+    let sections = {
+        home: [],
+        subsystems: [],
+        swarmStatus: [],
+        targetStatus: [],
+    };
+
+    // Since we want to stuff all our output into a box, collect it into an array instead of printing it.
+    let output = [];
+    printfn = (obj) => output.push(obj);
+    let print1Column = (data) => printItemsNColumns(data, 1, printfn);
+    let aFewSecondsAgo = Date.now() - 45 * 1000;
+    let targets = Object.values(servers);
+    // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
+    targets = targets.filter(
+        (s) =>
+            s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo ||
+            s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo ||
+            s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo
+    );
+    let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > aFewSecondsAgo);
+    let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= aFewSecondsAgo);
+
+    // --- HOME DATA ---
+    sections.home.push(formatHomeSection(servers, ns, insideWidth));
+    sections.subsystems.push(formatSubsystemSection(ns, insideWidth));
+    // --- SWARM STATUS ---
+    sections.swarmStatus.push(formatSwarmSection(servers, ns, insideWidth));
+    // --- Target Summary ---
+    lines = [`  Being Hacked: ${hackTargets.length}, Being Prepared: ${prepTargets.length}`];
+    let data = boxdraw(lines, 'Target Summary', insideWidth);
+    sections.targetStatus.push(data);
+
+    // Add hyperlinks to the subsystems section.
+    for (let i = 0; i < sections.subsystems[0].length; i++) {
+        let line = sections.subsystems[0][i];
+        // grab the first word from the line.
+        let sysname = line.match(/\w+-*\w*/g);
+        if (sysname != null) {
+            sysname = sysname[0];
+            let sys = subsystems.find((s) => s.name === sysname);
+            // Add the link to open a tail window.
+            if (sys && sys.status === 'RUNNING' && sys.shouldTail) {
+                line = line.replace(/(\d+\.\d+ GB)/g, `<a class="tail" style="text-decoration: underline">$1</a>`);
+            }
+            // Special displays
+            if (sys && sys.name === 'daemon') {
+                line = line.replace(/(daemon)/, `<a class="showTarget" style="text-decoration: underline">$1</a>`);
+            }
+            sections.subsystems[0][i] = line;
+        }
+    }
+
+    if (logType === 'Short') {
+        print1Column([sections.home, sections.subsystems, sections.swarmStatus, sections.targetStatus].flat(1));
+    }
+
+    // Print any common trailer stuff here.
+    let htmlFormat = (s) => {
+        if (s === '') return '</br>';
+        return `<p>${s}</p>`;
+    };
+    let monitorElem = box.querySelector('.panopticon-monitor');
+    monitorElem.innerHTML = output.map((line) => htmlFormat(line)).join('');
+
+    // Link up the <a> elements to their onClick() handlers.
+    box.querySelectorAll('.tail').forEach((q) =>
+        q.addEventListener('click', () => tailSubsystem(q.parentNode.textContent, ns))
+    );
+    box.querySelectorAll('.showTarget').forEach((q) => q.addEventListener('click', () => addDisplayType('Targets1Up')));
+}
+
+function formatSwarmSection(servers, ns, insideWidth) {
+    let pool = getPoolFromServers(servers, ns);
+    let percentUsed = pool.running / (pool.free + pool.running);
+    let graph = percentToGraph(percentUsed, '          ');
+    let lines = [];
+    percentUsed = ns.nFormat(percentUsed, '0%');
+
+    for (const key in pool) {
+        pool[key] = ns.nFormat(pool[key], '0a');
+    }
+    const free = pad(Array(5).join(' '), pool.free, true);
+    const running = pad(Array(5).join(' '), pool.running, true);
+
+    // --- Swarm status ---
+    lines = [
+        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`,
+        `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`,
+    ];
+    let data = boxdraw(lines, 'Swarm Status', insideWidth);
+    return { data, lines };
+}
+
+/**
+ * Open the tail window of a subsystem.
+ * @param {string} sysname
+ * @param {NS} ns
+ */
+function tailSubsystem(sysname, ns) {
+    // grab the first word from the line.
+    sysname = sysname.match(/\w+-*\w*/g)[0];
+    let sys = subsystems.find((s) => s.name === sysname);
+    if (sys.status === 'RUNNING' && sys.shouldTail) {
+        // Use our network monito to tail the windows, so we can do re-coloring and stuff?
+        // await sendC2message(new C2Command('net-monitor', 'net', 'set', 'log', sys.name, ns), ns);
+
+        //check to see if there's another instance running to also pull up (mostly for net-monitor)
+        for (const ps of ns.ps(sys.host)) {
+            if (ps.filename == sys.filename) ns.tail(sys.filename, sys.host, ...ps.args);
+        }
+    }
+}
+
+/**
+ * Print our fancy target status display into the box.
+ * @param {string} logType
+ * @param {Object.<string,Server>} servers
+ * @param {Element} box
+ * @param {NS} ns
+ */
+export function printTargetStatus(logType, servers, box, ns) {
     const insideWidth = 48;
     let lines = [];
     let printfn = ns.print;
@@ -321,9 +462,6 @@ export function printFancyStatus(servers, logType, playerInfo, box, ns) {
         let data = printfServer(server, ns);
         sections.allServers.push(data);
     }
-    // === HOME DATA ===
-    sections.home.push(formatHomeSection(servers, ns, insideWidth));
-    sections.subsystems.push(formatSubsystemSection(ns, insideWidth));
     // --- SWARM STATUS ---
     // get information about the current pool of workers, and reformat everything as pretty strings.
     let pool = getPoolFromServers(servers, ns);
@@ -448,13 +586,10 @@ export function printFancyStatus(servers, logType, playerInfo, box, ns) {
     if (logType.includes('Servers')) {
         printColumns(sections.allServers);
     }
-    if (logType === 'Short') {
-        print1Column([sections.home, sections.subsystems, sections.swarmStatus, sections.targetStatus].flat(1));
-    }
 
     // Print any common trailer stuff here.
     let htmlFormat = (s) => {
-        if (s === '') s = '</br>';
+        if (s === '') return '</br>';
         return `<p>${s}</p>`;
     };
     let monitorElem = box.querySelector('.panopticon-monitor');
@@ -483,6 +618,7 @@ function formatSubsystemSection(ns, insideWidth) {
         let name = pad(namePad, system.name);
         let size = ns.nFormat(script.ramUsage * Math.pow(10, 9), '0.00 b');
         size = pad('        ', size, true);
+        // We want to turn the size field into a hyperlink
         let line = `${name} ${size}  ${income} ${cps}`;
         lines.push(line);
     }
