@@ -50,7 +50,7 @@ export const subsystems = [
     new SubSystem('daemon', 'daemon.js', 'home', ['-s', '--cycle-timing-delay', 400, '--share-max-utilization', 0.8], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], false),
     new SubSystem('stats', 'stats.js', 'home'),
-    new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], false),
+    new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], true),
     new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
     new SubSystem('stockticker', '/Temp/stockmarket-summary-tail.js', 'home', [], true),
     new SubSystem('gangs', 'gangs.js', 'home', [], true),
