@@ -19,12 +19,19 @@ The 'net' script is meant to start, stop, and control everything you have runnin
 net monitor
 net mon targets1up
 net monitor targets2up
+
 net start
 net stop
+net stop daemon
 net restart
+
 net tail
 net tail <subsystem>
-net stop daemon
+
+net server list
+net server prices
+net server buy 20
+net server delete 1
 ```  
 etc. 
 
