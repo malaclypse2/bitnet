@@ -338,7 +338,7 @@ function printOverviewStatus(logType, servers, box, ns) {
     for (let i = 0; i < sections.subsystems[0].length; i++) {
         let line = sections.subsystems[0][i];
         // grab the first word from the line.
-        let sysname = line.match(/\w+-*\w*/g);
+        let sysname = line.match(/\w+-*\w*-*\w*/g);
         if (sysname != null) {
             sysname = sysname[0];
             let sys = subsystems.find((s) => s.name === sysname);
@@ -401,7 +401,7 @@ function formatSwarmSection(servers, ns, insideWidth) {
  */
 function tailSubsystem(sysname, ns) {
     // grab the first word from the line.
-    sysname = sysname.match(/\w+-*\w*/g)[0];
+    sysname = sysname.match(/\w+-*\w*-*\w*/g)[0];
     let sys = subsystems.find((s) => s.name === sysname);
     if (sys.status === 'RUNNING' && sys.shouldTail) {
         // Use our network monito to tail the windows, so we can do re-coloring and stuff?
