@@ -6,7 +6,7 @@ import { createBox } from '/box/box.js';
 
 /**@typedef{import('/scripts/index.js').NS} NS */
 
-const displayTypes = ['Short', 'Targets1Up', 'Targets2Up'];
+const displayTypes = ['Short', 'Targets1Up', 'Targets2Up', 'Stocks'];
 
 // Globals so we can manipulate the displays via callbacks.
 let displays = {};
@@ -227,12 +227,68 @@ function dispatchMonitorUpdate(logType, logTarget, box, ns) {
         Targets2Up: printTargetStatus,
         Short: printOverviewStatus,
         Log: printLogMessages,
+        Stocks: printStockStatus,
     };
     if (dispatch[logType] != undefined) {
         dispatch[logType](logType, logTarget, box, ns);
     } else {
         ns.tprint(`Trying to update a window with logType '${logType}', but I don't know how to handle that log type.`);
     }
+}
+
+/**
+ * Print our Stock Status into the box.
+ * @param {string} logType
+ * @param {Object.<string,Server>} servers
+ * @param {Element} box
+ * @param {NS} ns
+ */
+function printStockStatus(logType, servers, box, ns) {
+    const insideWidth = 48;
+    let output = [];
+    let printfn = (obj) => output.push(obj);
+    let print1Column = (data) => printItemsNColumns(data, 1, printfn);
+
+    let symbols = ns.stock.getSymbols();
+    for (const symbol of symbols) {
+        let position = ns.stock.getPosition(symbol);
+        let nLong = position[0];
+        let pLong = position[1];
+        let nShort = position[2];
+        let pShort = position[3];
+        if (nLong + nShort > 0) {
+            let lines = [];
+            lines.push(`Current Price ${ns.nFormat(ns.stock.getPrice(symbol), '$0.00a')}`)
+            if (nLong > 0) {
+                const spent = nLong * pLong;
+                let profit = ns.stock.getSaleGain(symbol, nLong, 'Long') - spent;
+                let profits = ns.nFormat(profit, '$0.00a');
+                if (profit > 0) profits = '+' + profits;
+                let part1 = pad(Array(40).join(' '), `Holding ${ns.nFormat(nLong, '0.0a')} @ ${ns.nFormat(pLong, '$0.00a')} (${ns.nFormat(spent, '$0.0a')}) `);
+                let part2 = pad(Array(10).join(' '), `${profits}`, true)
+                lines.push(`${part1}${part2}`);
+            }
+            if (nShort > 0) {
+                const spent = nShort * pShort;
+                let profit = ns.stock.getSaleGain(symbol, nShort, 'Short') - spent;
+                let profits = ns.nFormat(profit, '$0.00a');
+                if (profit > 0) profits = '+' + profits;
+                let part1 = pad(Array(40).join(' '), `Shorted ${ns.nFormat(nShort, '0.0a')} @ ${ns.nFormat(pShort, '$0.00a')} (${ns.nFormat(spent, '$0.0a')}) `);
+                let part2 = pad(Array(10).join(' '), `${profits}`, true)
+                lines.push(`${part1}${part2}`);
+            }
+            output.push(boxdraw(lines, symbol, insideWidth));
+        }
+    }
+    let htmlFormat = (s) => {
+        if (s === '') return '</br>';
+        return `<p>${s}</p>`;
+    };
+    let monitorElem = box.querySelector('.panopticon-monitor');
+    monitorElem.innerHTML = output
+        .flat()
+        .map((line) => htmlFormat(line))
+        .join('');
 }
 
 /**
@@ -264,12 +320,7 @@ function printOverviewStatus(logType, servers, box, ns) {
     let aFewSecondsAgo = Date.now() - 45 * 1000;
     let targets = Object.values(servers);
     // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
-    targets = targets.filter(
-        (s) =>
-            s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo ||
-            s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo ||
-            s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo
-    );
+    targets = targets.filter((s) => s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo || s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo || s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo);
     let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > aFewSecondsAgo);
     let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= aFewSecondsAgo);
 
@@ -292,12 +343,15 @@ function printOverviewStatus(logType, servers, box, ns) {
             sysname = sysname[0];
             let sys = subsystems.find((s) => s.name === sysname);
             // Add the link to open a tail window.
-            if (sys && sys.status === 'RUNNING' && sys.shouldTail) {
+            if (sys && sys.shouldTail) {
                 line = line.replace(/(\d+\.\d+ GB)/g, `<a class="tail" style="text-decoration: underline">$1</a>`);
             }
             // Special displays
             if (sys && sys.name === 'daemon') {
                 line = line.replace(/(daemon)/, `<a class="showTarget" style="text-decoration: underline">$1</a>`);
+            }
+            if (sys && sys.name === 'stockmaster') {
+                line = line.replace(/(stockmaster)/, `<a class="showStocks" style="text-decoration: underline">$1</a>`);
             }
             sections.subsystems[0][i] = line;
         }
@@ -316,10 +370,9 @@ function printOverviewStatus(logType, servers, box, ns) {
     monitorElem.innerHTML = output.map((line) => htmlFormat(line)).join('');
 
     // Link up the <a> elements to their onClick() handlers.
-    box.querySelectorAll('.tail').forEach((q) =>
-        q.addEventListener('click', () => tailSubsystem(q.parentNode.textContent, ns))
-    );
+    box.querySelectorAll('.tail').forEach((q) => q.addEventListener('click', () => tailSubsystem(q.parentNode.textContent, ns)));
     box.querySelectorAll('.showTarget').forEach((q) => q.addEventListener('click', () => addDisplayType('Targets1Up')));
+    box.querySelectorAll('.showStocks').forEach((q) => q.addEventListener('click', () => addDisplayType('Stocks')));
 }
 
 function formatSwarmSection(servers, ns, insideWidth) {
@@ -336,12 +389,9 @@ function formatSwarmSection(servers, ns, insideWidth) {
     const running = pad(Array(5).join(' '), pool.running, true);
 
     // --- Swarm status ---
-    lines = [
-        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`,
-        `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`,
-    ];
+    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`];
     let data = boxdraw(lines, 'Swarm Status', insideWidth);
-    return { data, lines };
+    return data;
 }
 
 /**
@@ -392,12 +442,7 @@ export function printTargetStatus(logType, servers, box, ns) {
     let aFewSecondsAgo = Date.now() - 45 * 1000;
     let targets = Object.values(servers);
     // Simply filtering by being the target of an attack is fine, but it results in too much churn. Let's do some sort of decay time instead.
-    targets = targets.filter(
-        (s) =>
-            s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo ||
-            s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo ||
-            s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo
-    );
+    targets = targets.filter((s) => s.lastTimeSeenTargetedBy.hack > aFewSecondsAgo || s.lastTimeSeenTargetedBy.grow > aFewSecondsAgo || s.lastTimeSeenTargetedBy.weaken > aFewSecondsAgo);
     let hackTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack > aFewSecondsAgo);
     let prepTargets = targets.filter((t) => t.lastTimeSeenTargetedBy.hack <= aFewSecondsAgo);
 
@@ -476,10 +521,7 @@ export function printTargetStatus(logType, servers, box, ns) {
     const running = pad(Array(5).join(' '), pool.running, true);
 
     // --- Swarm status ---
-    lines = [
-        `  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`,
-        `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`,
-    ];
+    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`];
     let data = boxdraw(lines, 'Swarm Status', insideWidth);
     sections.swarmStatus.push(data);
 
@@ -501,18 +543,10 @@ export function printTargetStatus(logType, servers, box, ns) {
         topHackTargets.sort(cmpByMaxMoney).reverse();
         otherHackTargets.sort(cmpByMaxMoney).reverse();
 
-        let hackTargetsThreadCount = hackTargets
-            .map((t) => t.targetedBy)
-            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
-        let topHackTargetsThreadCount = topHackTargets
-            .map((t) => t.targetedBy)
-            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
-        let otherHackTargetsThreadCount = otherHackTargets
-            .map((t) => t.targetedBy)
-            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
-        let prepTargetsThreadCount = prepTargets
-            .map((t) => t.targetedBy)
-            .reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let hackTargetsThreadCount = hackTargets.map((t) => t.targetedBy).reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let topHackTargetsThreadCount = topHackTargets.map((t) => t.targetedBy).reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let otherHackTargetsThreadCount = otherHackTargets.map((t) => t.targetedBy).reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
+        let prepTargetsThreadCount = prepTargets.map((t) => t.targetedBy).reduce((sum, t) => sum + t.hack + t.grow + t.weaken, 0);
 
         let topHackThreadCount = ns.nFormat(topHackTargetsThreadCount, '0.0a');
         let otherHackThreadCount = ns.nFormat(otherHackTargetsThreadCount, '0.0a');
@@ -526,9 +560,7 @@ export function printTargetStatus(logType, servers, box, ns) {
         // And a summary of the rest.
         if (hackTargets.length > topN) {
             let targetTitle = `Hacking ${otherHackTargets.length} more targets, using ${otherHackThreadCount} threads`;
-            let targetstr = otherHackTargets
-                .map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`)
-                .join(', ');
+            let targetstr = otherHackTargets.map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`).join(', ');
             // Even this summary gets long if there are more than about 10 in this list.
             if (otherHackTargets.length > 10) {
                 let shortlist = otherHackTargets.slice(0, 8);
@@ -537,13 +569,7 @@ export function printTargetStatus(logType, servers, box, ns) {
                     rest.map((server) => server.targetedBy.total).reduce((sum, threads) => sum + threads, 0),
                     '0a'
                 );
-                let shortnames =
-                    'Including ' +
-                    shortlist
-                        .map(
-                            (target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`
-                        )
-                        .join(', ');
+                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(getAmountTargetedToBeHacked(target, ns), '$0a')})`).join(', ');
                 shortnames += `, and ${rest.length} more using ${restThreads} threads.`;
                 targetstr = shortnames;
             }
@@ -555,9 +581,7 @@ export function printTargetStatus(logType, servers, box, ns) {
             printColumns(sections.prepTargets);
         } else {
             let title = `Preparing ${prepTargets.length} targets, using ${prepThreadCount} threads`;
-            let prepstr = prepTargets
-                .map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`)
-                .join(', ');
+            let prepstr = prepTargets.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join(', ');
             // Even this summary gets long if there are more than about 10 in this list.
             if (prepTargets.length > 10) {
                 let shortlist = prepTargets.slice(0, 8);
@@ -566,11 +590,7 @@ export function printTargetStatus(logType, servers, box, ns) {
                     rest.map((server) => server.targetedBy.total).reduce((sum, threads) => sum + threads, 0),
                     '0a'
                 );
-                let shortnames =
-                    'Including ' +
-                    shortlist
-                        .map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`)
-                        .join(', ');
+                let shortnames = 'Including ' + shortlist.map((target) => target.name + ` (${ns.nFormat(target.targetedBy.total, '0a')})`).join(', ');
                 shortnames += `, and ${rest.length} more using ${restThreads} threads.`;
                 prepstr = shortnames;
             }
@@ -678,7 +698,6 @@ function formatHomeSection(servers, ns, insideWidth) {
  */
 function getAmountTargetedToBeHacked(server, ns) {
     let hf = server.hackFactor;
-    if (ns.ls('home', 'Formulas.exe').length > 0)
-        hf = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
+    if (ns.ls('home', 'Formulas.exe').length > 0) hf = ns.formulas.hacking.hackPercent(ns.getServer(server.name), ns.getPlayer());
     return hf * server.targetedBy.hack * server.maxMoney;
 }
