@@ -182,44 +182,40 @@ async function runTailCommand(_host, args, ns) {
  * @param {import('/scripts/index.js').NS} ns
  */
 async function runStopCommand(host, args, ns) {
-    let subsystem = '';
-    // If we were passed an argument, just shut down the one subsystem.
-    if (args._.length > 0) {
-        subsystem = args._.shift();
-        ns.tprint(`Killing ${subsystem} subsystem`);
-        let sys = subsystems.find((s) => s.name === subsystem);
+    let systemsToStop = subsystems;
+    // If we were passed arguments, just shut down those subsystems.
+    if (args._.length > 0) systemsToStop = [];
+    while (args._.length > 0) {
+        let systemName = args._.shift();
+        const subsystem = subsystems.find((s) => s.name === systemName);
+        if (subsystem != undefined) systemsToStop.push(subsystem);
+    }
+    // Otherwise, shut everything  down
+    ns.tprint(`Killing subsystems`);
+    for (const sys of systemsToStop) {
         if (sys.status === 'RUNNING') {
             let process = sys.process;
-            let isThisScript =
-                process.filename === ns.getScriptName() && process.args === ns.args && host === ns.getHostname();
-            if (sys.name === 'stockmaster') {
-                // Quit stockmaster gracefully.
-                ns.exec('/stockmaster.js', sys.host, 1, '--liquidate');
-            } else if (!isThisScript) {
-                // Otherwise, kill everything important other than ourselves.
-                ns.tprint(`... Killing ${process.filename} ${process.args.join(' ')}`);
-                ns.kill(process.filename, host, ...process.args);
+            let isThisScript = process.filename === ns.getScriptName() && process.args === ns.args && host === ns.getHostname();
+            switch (sys.name) {
+                case 'stockmaster': // Quit stockmaster gracefully.
+                    ns.tprint(`... Liquidating ${process.filename} ${process.args.join(' ')}`);
+                    ns.exec('/stockmaster.js', sys.host, 1, '--liquidate');
+                    break;
+                case 'spend-hacknet-hashes': // Liquidate any stored hashes.
+                    ns.tprint(`... Liquidating ${process.filename} ${process.args.join(' ')}`);
+                    ns.exec('/spend-hacknet-hashes.js', sys.host, 1, '--liquidate');
+                    break;
+                case 'stats': // Let the stat script keep running
+                    break;
+                default:
+                    // Otherwise, kill everything important other than ourselves.
+                    if (!isThisScript) {
+                        ns.tprint(`... Killing ${process.filename} ${process.args.join(' ')}`);
+                        ns.kill(process.filename, host, ...process.args);
+                    }
+                    break;
             }
             sys.refreshStatus(ns);
-        }
-    } else {
-        // Otherwise, shut everything  down
-        ns.tprint(`Killing all running subsystems`);
-        for (const sys of subsystems) {
-            if (sys.status === 'RUNNING') {
-                let process = sys.process;
-                let isThisScript =
-                    process.filename === ns.getScriptName() && process.args === ns.args && host === ns.getHostname();
-                if (sys.name === 'stockmaster') {
-                    // Quit stockmaster gracefully.
-                    ns.exec('/stockmaster.js', sys.host, 1, '--liquidate');
-                } else if (!isThisScript) {
-                    // Otherwise, kill everything important other than ourselves.
-                    ns.tprint(`... Killing ${process.filename} ${process.args.join(' ')}`);
-                    ns.kill(process.filename, host, ...process.args);
-                }
-                sys.refreshStatus(ns);
-            }
         }
     }
 }
@@ -285,8 +281,7 @@ async function runHackCommand(host, args, ns) {
  */
 async function runMonitorCommand(host, args, ns) {
     if (args.help) {
-        let msg =
-            'monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.';
+        let msg = 'monitor commands. net monitor [DisplayType] to change the running display type. Will also try to open the tail window.';
         ns.tprint(msg);
     } else {
         // See if we can find a tail window to open
@@ -351,9 +346,7 @@ async function runServersCommand(host, args, ns) {
                     }
                 }
             } else {
-                let msg = `Unknown arguments to net server buy: '${args._.join(
-                    ' '
-                )}' expected net server buy [num] siz`;
+                let msg = `Unknown arguments to net server buy: '${args._.join(' ')}' expected net server buy [num] siz`;
                 ns.tprint(msg);
             }
         }

@@ -47,9 +47,9 @@ export class SubSystem {
 
 export const subsystems = [
     //new SubSystem('net-hack', '/scripts/net-hack.js', 'home'),
-    new SubSystem('daemon', 'daemon.js', 'home', ['-s', '--cycle-timing-delay', 400, '--share-max-utilization', 0.8], true),
+    new SubSystem('daemon', 'daemon.js', 'home', ['-s', '-v', '--cycle-timing-delay', 1000, '--queue-delay', 500], true),
     new SubSystem('net-monitor', '/scripts/net-monitor.js', 'home', ['--start'], false),
-    new SubSystem('stats', 'stats.js', 'home'),
+    new SubSystem('stats', 'stats.js', 'home', false),
     new SubSystem('hacknet-manager', 'hacknet-upgrade-manager.js', 'home', [], true),
     new SubSystem('stockmaster', 'stockmaster.js', 'home', [], true),
     new SubSystem('stockticker', '/Temp/stockmarket-summary-tail.js', 'home', [], true),
