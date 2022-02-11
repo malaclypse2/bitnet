@@ -245,11 +245,14 @@ function dispatchMonitorUpdate(logType, logTarget, box, ns) {
  */
 function printStockStatus(logType, servers, box, ns) {
     const insideWidth = 48;
+    let positionSummary = [];
     let output = [];
     let printfn = (obj) => output.push(obj);
     let print1Column = (data) => printItemsNColumns(data, 1, printfn);
+    let print2Column = (data) => printItemsNColumns(data, 2, printfn);
+    let print3Column = (data) => printItemsNColumns(data, 3, printfn);
 
-    let symbols = ns.stock.getSymbols();
+    let symbols = ns.stock.getSymbols().sort();
     for (const symbol of symbols) {
         let position = ns.stock.getPosition(symbol);
         let nLong = position[0];
@@ -258,14 +261,14 @@ function printStockStatus(logType, servers, box, ns) {
         let pShort = position[3];
         if (nLong + nShort > 0) {
             let lines = [];
-            lines.push(`Current Price ${ns.nFormat(ns.stock.getPrice(symbol), '$0.00a')}`)
+            lines.push(`Current Price ${ns.nFormat(ns.stock.getPrice(symbol), '$0.00a')}`);
             if (nLong > 0) {
                 const spent = nLong * pLong;
                 let profit = ns.stock.getSaleGain(symbol, nLong, 'Long') - spent;
                 let profits = ns.nFormat(profit, '$0.00a');
                 if (profit > 0) profits = '+' + profits;
                 let part1 = pad(Array(40).join(' '), `Holding ${ns.nFormat(nLong, '0.0a')} @ ${ns.nFormat(pLong, '$0.00a')} (${ns.nFormat(spent, '$0.0a')}) `);
-                let part2 = pad(Array(10).join(' '), `${profits}`, true)
+                let part2 = pad(Array(10).join(' '), `${profits}`, true);
                 lines.push(`${part1}${part2}`);
             }
             if (nShort > 0) {
@@ -274,10 +277,10 @@ function printStockStatus(logType, servers, box, ns) {
                 let profits = ns.nFormat(profit, '$0.00a');
                 if (profit > 0) profits = '+' + profits;
                 let part1 = pad(Array(40).join(' '), `Shorted ${ns.nFormat(nShort, '0.0a')} @ ${ns.nFormat(pShort, '$0.00a')} (${ns.nFormat(spent, '$0.0a')}) `);
-                let part2 = pad(Array(10).join(' '), `${profits}`, true)
+                let part2 = pad(Array(10).join(' '), `${profits}`, true);
                 lines.push(`${part1}${part2}`);
             }
-            output.push(boxdraw(lines, symbol, insideWidth));
+            positionSummary.push(boxdraw(lines, symbol, insideWidth));
         }
     }
     let htmlFormat = (s) => {
@@ -285,10 +288,14 @@ function printStockStatus(logType, servers, box, ns) {
         return `<p>${s}</p>`;
     };
     let monitorElem = box.querySelector('.panopticon-monitor');
-    monitorElem.innerHTML = output
-        .flat()
-        .map((line) => htmlFormat(line))
-        .join('');
+    if (positionSummary.length > 16) {
+        print3Column(positionSummary);
+    } else if (positionSummary.length > 8) {
+        print2Column(positionSummary);
+    } else {
+        print1Column(positionSummary);
+    }
+    monitorElem.innerHTML = output.map((line) => htmlFormat(line)).join('');
 }
 
 /**
@@ -389,7 +396,7 @@ function formatSwarmSection(servers, ns, insideWidth) {
     const running = pad(Array(5).join(' '), pool.running, true);
 
     // --- Swarm status ---
-    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`];
+    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.shares}`];
     let data = boxdraw(lines, 'Swarm Status', insideWidth);
     return data;
 }
@@ -521,7 +528,7 @@ export function printTargetStatus(logType, servers, box, ns) {
     const running = pad(Array(5).join(' '), pool.running, true);
 
     // --- Swarm status ---
-    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.share}`];
+    lines = [`  Free: ${free}, Running: ${running} (${percentUsed})    ${graph}`, `  Hack ${pool.hack}, Grow ${pool.grow}, Weaken ${pool.weaken}, Share ${pool.shares}`];
     let data = boxdraw(lines, 'Swarm Status', insideWidth);
     sections.swarmStatus.push(data);
 

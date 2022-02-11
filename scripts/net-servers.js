@@ -1,32 +1,6 @@
-import { Server, pad, printItemsNColumns, printLinesNColumns } from '/scripts/bit-lib.js';
+import { Server, pad, printLinesNColumns } from '/scripts/bit-lib.js';
 
-let names = [
-    'Alpha(α)',
-    'Beta(β)',
-    'Gamma(γ)',
-    'Delta(Δ)',
-    'Epsilon(ε)',
-    'Zeta(ζ)',
-    'Eta(η)',
-    'Theta(θ)',
-    'Iota(ι)',
-    'Kappa(κ)',
-    'Lambda(λ)',
-    'Mu(μ)',
-    'Nu(ν)',
-    'Xi(ξ)',
-    'Omicron(ο)',
-    'Pi(π)',
-    'Rho(ρ)',
-    'Sigma(σ)',
-    'Tau(τ)',
-    'Upsilon(υ)',
-    'Phi(φ)',
-    'Chi(χ)',
-    'Psi(Ψ)',
-    'Omega(Ω)',
-    'Infinity(∞)',
-];
+let names = ['Alpha(α)', 'Beta(β)', 'Gamma(γ)', 'Delta(Δ)', 'Epsilon(ε)', 'Zeta(ζ)', 'Eta(η)', 'Theta(θ)', 'Iota(ι)', 'Kappa(κ)', 'Lambda(λ)', 'Mu(μ)', 'Nu(ν)', 'Xi(ξ)', 'Omicron(ο)', 'Pi(π)', 'Rho(ρ)', 'Sigma(σ)', 'Tau(τ)', 'Upsilon(υ)', 'Phi(φ)', 'Chi(χ)', 'Psi(Ψ)', 'Omega(Ω)', 'Infinity(∞)'];
 
 /** @param {import('/scripts/index.js').NS} ns */
 export async function main(ns) {

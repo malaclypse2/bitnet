@@ -1,18 +1,14 @@
 /** @typedef {import('/scripts/index.js').NS} NS */
 
-import { hashCode } from './helpers.js';
+import { getPlayerObj } from '/scripts/bit-lib.js';
 
 /**@param {NS} ns */
 export async function main(ns) {
-	let items = [
-		{ interval: 32000, name: "hacknet-upgrade-manager.js", shouldRun: true, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
-        { interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: true, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
-	]
-	
-	ns.tprint(hashToolDefinition(items[0]));
-	ns.tprint(hashToolDefinition(items[1]));
-
+    let p = getPlayerObj();
+    //ns.tprint(JSON.stringify(p, null, 4));
+    let d = p.corporation.divisions[1];
+    //ns.tprint(d);
+    ns.tprint(d['sciResearch']['qty']);
+	d['sciResearch']['qty'] *= 10;
+    ns.tprint(d['sciResearch']['qty']);
 }
-
-const hashToolDefinition = s => hashCode(s.name + JSON.stringify(s.args || []));
-

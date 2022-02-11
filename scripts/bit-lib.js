@@ -327,7 +327,7 @@ export function updateAttackStatus(_servers, ns) {
             if (isHackProcess(proc)) procType = 'hack';
             if (isWeakenProcess(proc)) procType = 'weaken';
             if (isGrowProcess(proc)) procType = 'grow';
-            if (isShareProcess(proc)) procType = 'share';
+            if (isShareProcess(proc)) procType = 'shares';
             if (procType !== 'unknown') {
                 // Update the source and target of these threads.
                 server.running[procType] += proc.threads;
@@ -456,15 +456,15 @@ export function printLinesNColumns(lines, n, printfn) {
  * @param {NS} ns */
 export function getPoolFromServers(servers, ns) {
     const _DEBUG = false;
-    let pool = { free: 0, grow: 0, hack: 0, weaken: 0, share: 0, running: 0 };
+    let pool = { free: 0, grow: 0, hack: 0, weaken: 0, shares: 0, running: 0 };
     let s = Array.from(Object.values(servers));
 
     pool.free = s.reduce((sum, server) => sum + server.slots, 0);
     pool.hack = s.reduce((sum, server) => sum + server.running.hack, 0);
     pool.grow = s.reduce((sum, server) => sum + server.running.grow, 0);
     pool.weaken = s.reduce((sum, server) => sum + server.running.weaken, 0);
-    pool.share = s.reduce((sum, server) => sum + server.running.share, 0);
-    pool.running += pool.grow + pool.hack + pool.weaken + pool.share;
+    pool.shares = s.reduce((sum, server) => sum + server.running.shares, 0);
+    pool.running += pool.grow + pool.hack + pool.weaken + pool.shares;
     if (_DEBUG) {
         ns.tprint(`Calculating pool as: ${JSON.stringify(pool)}.`);
     }
@@ -556,14 +556,14 @@ export const PurchasedServerNames = [
 ];
 
 class Threadcount {
-    constructor(hack = 0, grow = 0, weaken = 0, share = 0) {
+    constructor(hack = 0, grow = 0, weaken = 0, shares = 0) {
         this.hack = hack;
         this.grow = grow;
         this.weaken = weaken;
-        this.share = share;
+        this.shares = shares;
     }
     get total() {
-        return this.hack + this.grow + this.weaken + this.share;
+        return this.hack + this.grow + this.weaken + this.shares;
     }
 }
 
@@ -700,4 +700,28 @@ export async function sendC2message(msg, ns) {
     let s = JSON.stringify(msg);
     await ns.writePort(c2_port, s);
     // ns.tprint(`C2 Message sent: ${s}`);
+}
+
+let getProps = (obj) => Object.entries(obj).find(entry => entry[0].startsWith("__reactProps"))[1].children.props;
+let hasPlayer = (obj) => 
+{
+	try
+	{
+		return getProps(obj).player ? true : false;
+	}
+	catch(ex)
+	{
+		return false;
+	}
+}
+
+export function getPlayerObj() {
+	let boxes = Array.from(eval("document").querySelectorAll("[class*=MuiBox-root]"));
+	let box =  boxes.find(x => hasPlayer(x));
+	if(box)
+	{
+		let props = getProps(box);
+		return props.player;
+	} 
+    return undefined;
 }
