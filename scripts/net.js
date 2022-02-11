@@ -115,13 +115,24 @@ async function runStartCommand(host, args, ns) {
     }
 
     // Start the host manager
-    if (['', 'host-manager', 'host'].includes(sys)) {
-        subsystem = subsystems.find((s) => s.name === 'host-manager');
+    // if (['', 'host-manager', 'host'].includes(sys)) {
+    //     subsystem = subsystems.find((s) => s.name === 'host-manager');
+    //     let sysargs = args._.length > 0 ? args._ : subsystem.defaultargs;
+    //     if (subsystem.status === 'STOPPED') {
+    //         ns.exec(subsystem.filename, subsystem.host, 1, ...sysargs);
+    //     } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
+    // }
+    
+    // Start the sleeve manager. If we start up work-for-factions here, we ought to start the sleeve system too.
+    if (['', 'sleeve', 'sleeves'].includes(sys)) {
+        subsystem = subsystems.find((s) => s.name === 'sleeve');
         let sysargs = args._.length > 0 ? args._ : subsystem.defaultargs;
         if (subsystem.status === 'STOPPED') {
             ns.exec(subsystem.filename, subsystem.host, 1, ...sysargs);
         } else ns.tprint(`${subsystem.filename} already running with arguments ${subsystem.scriptInfo.args}`);
     }
+    
+
     // Start the work manager. TODO: check for source files, free ram, and maybe a better place to run this.
     if (['', 'work', 'work-for-faction'].includes(sys)) {
         subsystem = subsystems.find((s) => s.name === 'work');
